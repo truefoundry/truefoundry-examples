@@ -1,8 +1,8 @@
 template: truefoundry.com/v1/fastapi
 parameters:
-  service_name: sklearn-iris
+  service_name: iris-clf-example
   python_version: python:3.9
-  workspace: v1:tfy-dub-euwe1-production:chirag-workspace-1
+  workspace: v1:tfy-dub-euwe1-production:example-workspace-1
   replicas: 1
   port: 8000
 overwrites:
