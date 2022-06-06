@@ -1,14 +1,14 @@
 template: truefoundry.com/v1/fastapi
 parameters:
-  service_name: iris-clf-example
+  service_name: iris-clf
   python_version: python:3.9
-  workspace: v1:tfy-dub-euwe1-production:example-workspace-1
+  workspace: v1:tfy-dub-euwe1-production:workspace-1
   replicas: 1
   port: 8000
 overwrites:
   Component.spec.container.env:
     - name: TFY_RUN_ID
-      value: 990e3773eb5d4f8dbba3e714c7868eaa
+      value: 99c4796b50e848599683cb2859116d41
   Component.spec.container.injectApiKeyInEnv: true
 #  To use your own docker file:
 #  BuildPack.spec.docker.overwrite: false

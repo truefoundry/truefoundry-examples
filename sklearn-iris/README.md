@@ -17,7 +17,7 @@ To deploy this example in your own account,
     ```shell
     pip install servicefoundry
     sfy login
-    sfy create workspace example-workspace-1
+    sfy create workspace workspace-1
     ```
 6. Deploy it!
     ```shell
