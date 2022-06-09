@@ -2,7 +2,7 @@ template: truefoundry.com/v1/fastapi
 parameters:
   service_name: churn-prediction-service
   python_version: python:3.7
-  workspace: v1:tfy-dub-euwe1-production:my-ws
+  workspace: v1:tfy-dub-euwe1-production:my-workspace
   replicas: 1
   port: 8080
 overwrites:
