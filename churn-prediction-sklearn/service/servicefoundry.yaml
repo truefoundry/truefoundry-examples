@@ -1,0 +1,12 @@
+template: truefoundry.com/v1/fastapi
+parameters:
+  service_name: churn-prediction-service
+  python_version: python:3.7
+  workspace: v1:tfy-dub-euwe1-production:my-ws
+  replicas: 1
+  port: 8080
+overwrites:
+  Component.spec.container.env:
+    - name: TFY_RUN_ID
+      value: b48ce55d9b1a4ca9ab314885aa2cb90e
+  Component.spec.container.injectApiKeyInEnv: true
