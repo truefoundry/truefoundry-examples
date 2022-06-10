@@ -1,6 +1,6 @@
 gradio
 servicefoundry
 protobuf
-mlfoundry
+mlfoundry==0.3.22
 tensorflow
 pandas

@@ -5,6 +5,6 @@ uvicorn
 Pillow
 numpy
 scikit-image
-mlfoundry
+mlfoundry==0.3.22
 tensorflow
 python-multipart

@@ -1,4 +1,4 @@
-mlfoundry==0.3.20
+mlfoundry==0.3.22
 fastapi==0.78.0
 prometheus-client==0.14.1
 servicefoundry==0.1.34
