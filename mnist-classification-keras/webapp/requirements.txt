@@ -1,0 +1,5 @@
+gradio
+servicefoundry
+protobuf==3.20.1
+mlfoundry
+tensorflow

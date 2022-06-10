@@ -1,0 +1,15 @@
+template: truefoundry.com/v1/gradio
+parameters:
+  service_name: mnist-gradio-service
+  python_version: python:3.7
+  workspace: v1:tfy-dub-euwe1-production:my-workspace
+  replicas: 1
+overwrites:
+  Component.spec.container.resources.memory.required: 512000000
+  Component.spec.container.resources.memory.limit: 1024000000
+  Component.spec.container.injectApiKeyInEnv: true
+  Component.spec.container.env:
+    - name: TFY_RUN_ID
+      value: eb57c9631dd4499f9f755db5bdd130fd
+    - name: CUDA_VISIBLE_DEVICES
+      value: '-1'
