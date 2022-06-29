@@ -2,7 +2,7 @@ template: truefoundry.com/v1/fastapi
 parameters:
   service_name: mnist-fastapi-service
   python_version: python:3.7
-  workspace: v1:tfy-dub-euwe1-production:my-workspace
+  workspace: v1:tfy-dub-euwe1-production:my-ws
   replicas: 1
   port: 8080
 overwrites:
@@ -11,4 +11,4 @@ overwrites:
   Component.spec.container.injectApiKeyInEnv: true
   Component.spec.container.env:
     - name: TFY_RUN_ID
-      value: eb57c9631dd4499f9f755db5bdd130fd
+      value: ff88a7f22c9f4cacbda86f79328f0e79
