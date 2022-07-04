@@ -10,7 +10,7 @@ service:
   memory:
     required: 128000000
     limit: 512000000
-  workspace: v1:tfy-dub-euwe1-production:big-ws
+  workspace: v1:tfy-dub-euwe1-production:my-ws
   env:
     - name: TFY_RUN_ID
       value: ff88a7f22c9f4cacbda86f79328f0e79
