@@ -4,6 +4,7 @@ import mlfoundry as mlf
 from PIL import Image
 from io import BytesIO
 from fastapi import File, UploadFile
+from fastapi.responses import HTMLResponse
 from skimage.transform import resize
 from servicefoundry.service import fastapi
 
@@ -19,6 +20,11 @@ def recognize_digit(image):
 
 def load_image_into_numpy_array(data):
     return np.array(Image.open(BytesIO(data)))
+
+@app.get("/", response_class=HTMLResponse)
+def root():
+    html_content = "<html><body>Open <a href='/docs'>Docs</a></body></html>"
+    return HTMLResponse(content=html_content, status_code=200)
 
 @app.post('/predict')
 async def predict(image: UploadFile = File(...)):

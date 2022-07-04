@@ -1,6 +1,7 @@
+maturin==0.12.20
 gradio
 servicefoundry
 protobuf
-mlfoundry==0.3.22
+mlfoundry
 tensorflow
 pandas

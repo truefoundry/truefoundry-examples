@@ -11,10 +11,9 @@ model = run.get_model()
 def recognize_digit(image):
     image = image.reshape(1, 28, 28, 1)  # add a batch dimension
     prediction = model.predict(image).tolist()[0]
-    run.log_prediction(pd.DataFrame(), prediction, '<unique-id-for-current-image>')
     return {str(i): prediction[i] for i in range(10)}
 
 gr.Interface(fn=recognize_digit,
             inputs="sketchpad",
             outputs=gr.outputs.Label(num_top_classes=3),
-            title="MNIST Sketchpad").launch(server_name="0.0.0.0")
+            title="MNIST Sketchpad").launch(server_name="0.0.0.0", server_port=8080)
