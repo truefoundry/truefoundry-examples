@@ -7,3 +7,4 @@
    1.  Replace the [run id](./servicefoundry.yaml#L16) with your own run id
    2.  Replace the [workspace FQN](./servicefoundry.yaml#L13) with your workspace FQN. You can copy your workspace FQN from the [workspaces dashboard](https://app.truefoundry.com/workspace).
 3. Now simply run, `sfy deploy` from this folder to deploy your webapp.
+4. Access your service from the [dashboard](https://app.truefoundry.com/workspace).
