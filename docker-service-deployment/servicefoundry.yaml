@@ -1,0 +1,14 @@
+build:
+  build_pack: sfy_build_pack_docker
+service:
+  name: gradio-app
+  cpu:
+    required: 0.05
+    limit: 0.1
+  memory:
+    required: 128000000
+    limit: 512000000
+  workspace: v1:local:demo-ws
+  ports:
+  - container_port: 8080
+    protocol: TCP
