@@ -12,7 +12,7 @@ LABELS = ["T-shirt/top","Trouser","Pullover","Dress","Coat", "Sandal","Shirt","S
 def classify_image(image):
     image = image.reshape(1, 28, 28)  # add a batch dimension
     image = image.astype('float32') /255.0
-    prediction = reconstructed_model.predict(image).tolist()[0]
+    prediction = reconstructed_model.predict(image).tolist()[0] # [0] because prediction only one image
     return {LABELS[i]: prediction[i] for i in range(len(prediction))}
 
 gr.Interface(fn=classify_image,
