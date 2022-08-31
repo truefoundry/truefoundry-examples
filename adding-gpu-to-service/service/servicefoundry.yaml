@@ -1,17 +1,18 @@
-build:
-  build_pack: sfy_build_pack_docker
-service:
-  name: gpu-test
-  cpu:
-    required: 0.05
-    limit: 0.1
-  gpu:
-    limit: 1
-  memory:
-    required: 512000000
-    limit: 1024000000
-  workspace: v1:local:cj-workspace-1
-  ports:
-  - container_port: 8000
-    protocol: TCP
-  replicas: 1
+name: gpu-test
+components:
+  - name: gpu-test
+    type: service
+    image:
+      type: build
+      build_source:
+        type: local
+      build_spec:
+        type: dockerfile
+    resources:
+      cpu_request: 50m
+      cpu_limit: 100m
+      memory_request: 512Mi
+      memorty_limit: 1024Mi
+      gpu_limit: 1
+    ports:
+      - port: 8000

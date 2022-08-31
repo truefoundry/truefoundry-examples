@@ -1,20 +1,23 @@
-build:
-  build_pack: sfy_build_pack_python
-  options:
-    python_version: python:3.9.0
-service:
-  name: fastapi-service-mnist
-  cpu:
-    required: 0.05
-    limit: 0.1
-  memory:
-    required: 128000000
-    limit: 512000000
-  workspace: v1:tfy-dub-euwe1-production:workspace-1
-  env:
+name: fastapi-service-mnist
+components:
+  - name: fastapi-service-mnist
+    type: service
+    image:
+      type: build
+      build_source:
+        type: local
+      build_spec:
+        type: tfy-python-buildpack
+        python_version: 3.9
+        command: uvicorn main:app --port 8000 --host 0.0.0.0
+    resources:
+      cpu_request: 50m
+      cpu_limit: 100m
+      memory_request: 128Mi
+      memorty_limit: 512Mi
+    ports:
+      - port: 8000
+    env:
     - name: TFY_RUN_ID
       value: 99c4796b50e848599683cb2859116d41
-  ports:
-  - container_port: 8000
-    protocol: TCP
-  replicas: 1
+

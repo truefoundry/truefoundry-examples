@@ -1,20 +1,23 @@
-build:
-  build_pack: sfy_build_pack_python
-  options:
-    python_version: python:3.9.0
-service:
-  name: gradio-webapp
-  cpu:
-    required: 0.05
-    limit: 0.1
-  memory:
-    required: 128000000
-    limit: 512000000
-  workspace: v1:tfy-dub-euwe1-production:my-ws
-  env:
+name: gradio-webapp
+components:
+  - name: gradio-webapp
+    type: service
+    image:
+      type: build
+      build_source:
+        type: local
+      build_spec:
+        type: tfy-python-buildpack
+        python_version: 3.9
+        command: python webapp.py
+    resources:
+      cpu_request: 50m
+      cpu_limit: 100m
+      memory_request: 128Mi
+      memorty_limit: 512Mi
+    ports:
+      - port: 8080
+    env:
     - name: TFY_RUN_ID
       value: ff88a7f22c9f4cacbda86f79328f0e79
-  ports:
-  - container_port: 8080
-    protocol: TCP
-  replicas: 1
+
