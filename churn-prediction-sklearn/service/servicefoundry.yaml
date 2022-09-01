@@ -1,6 +1,6 @@
-name: churn-prediction-service
+name: churn-prediction-svc
 components:
-  - name: churn-prediction-service
+  - name: churn-prediction-svc
     type: service
     image:
       type: build

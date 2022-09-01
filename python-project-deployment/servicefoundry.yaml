@@ -1,6 +1,6 @@
-name: flask-app
+name: flask-svc
 components:
-  - name: flask-app
+  - name: flask-svc
     type: service
     image:
       type: build

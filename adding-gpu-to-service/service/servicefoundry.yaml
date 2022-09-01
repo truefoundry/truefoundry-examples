@@ -1,6 +1,6 @@
-name: gpu-test
+name: gpu-svc
 components:
-  - name: gpu-test
+  - name: gpu-svc
     type: service
     image:
       type: build

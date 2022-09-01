@@ -1,6 +1,6 @@
-name: gradio-webapp
+name: fashion-mnist-app
 components:
-  - name: gradio-webapp
+  - name: fashion-mnist-app
     type: service
     image:
       type: build

@@ -1,6 +1,6 @@
-name: gradio-app
+name: docker-svc
 components:
-  - name: gradio-app
+  - name: docker-svc
     type: service
     image:
       type: build

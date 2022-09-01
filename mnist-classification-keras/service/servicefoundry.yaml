@@ -1,6 +1,6 @@
-name: fastapi-service-mnist
+name: mnist-service
 components:
-  - name: fastapi-service-mnist
+  - name: mnist-service
     type: service
     image:
       type: build

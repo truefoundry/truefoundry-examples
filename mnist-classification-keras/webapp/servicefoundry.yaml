@@ -1,6 +1,6 @@
-name: gradio-webapp
+name: mnist-app
 components:
-  - name: gradio-webapp
+  - name: mnist-app
     type: service
     image:
       type: build

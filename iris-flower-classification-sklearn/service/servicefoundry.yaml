@@ -1,6 +1,6 @@
-name: fastapi-service-mnist
+name: iris-svc
 components:
-  - name: fastapi-service-mnist
+  - name: iris-svc
     type: service
     image:
       type: build
