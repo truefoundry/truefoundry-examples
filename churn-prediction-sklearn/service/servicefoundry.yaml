@@ -1,20 +1,22 @@
-build:
-  build_pack: sfy_build_pack_python
-  options:
-    python_version: python:3.7.0
-service:
-  name: churn-prediction-service
-  cpu:
-    required: 0.05
-    limit: 0.1
-  memory:
-    required: 128000000
-    limit: 512000000
-  workspace: v1:tfy-dub-euwe1-production:my-workspace
-  env:
+name: churn-prediction-svc
+components:
+  - name: churn-prediction-svc
+    type: service
+    image:
+      type: build
+      build_source:
+        type: local
+      build_spec:
+        type: tfy-python-buildpack
+        python_version: 3.7
+        command: uvicorn main:app --port 8000 --host 0.0.0.0
+    resources:
+      cpu_request: 50m
+      cpu_limit: 100m
+      memory_request: 128Mi
+      memorty_limit: 512Mi
+    ports:
+      - port: 8000
+    env:
     - name: TFY_RUN_ID
       value: b48ce55d9b1a4ca9ab314885aa2cb90e
-  ports:
-  - container_port: 8000
-    protocol: TCP
-  replicas: 1

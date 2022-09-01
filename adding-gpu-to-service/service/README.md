@@ -31,7 +31,7 @@ To deploy this minimal example,
 4. Run `sfy deploy`
 
    ```shell
-   sfy deploy --workspace <your-workspace-fqn>
+   sfy deploy --workspace-fqn <your-workspace-fqn>
    ```
 
    > You can also choose to put workspace fqn directly in the [`servicefoundry.yaml`](./servicefoundry.yaml#L13) and then deploy with just `sfy deploy`

@@ -3,9 +3,13 @@
 You can add GPUs to services by simply adding a limit in the servicefoundry.yaml file.
 
 ```
-service:
-  gpu:
-    limit: 1
+name: gpu-test
+components:
+  - name: gpu-test
+    type: service
+  ...
+    resources:
+      gpu_limit: 1
   ...
 ```
 
