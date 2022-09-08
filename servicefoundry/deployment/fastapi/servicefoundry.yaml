@@ -1,0 +1,16 @@
+name: fastapi
+components:
+  - name: fastapi
+    type: service
+    image:
+      type: build
+      build_source:
+        type: local
+      build_spec:
+        type: tfy-python-buildpack
+        command: uvicorn main:app --port 8000 --host 0.0.0.0
+    ports:
+      - port: 8000
+    resources:
+      memory_limit: 1500
+      memory_request: 1000

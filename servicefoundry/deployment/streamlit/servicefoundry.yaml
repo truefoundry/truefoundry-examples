@@ -1,0 +1,13 @@
+name: streamlit
+components:
+  - name: streamlit
+    type: service
+    image:
+      type: build
+      build_source:
+        type: local
+      build_spec:
+        type: tfy-python-buildpack
+        command: streamlit run main.py
+    ports:
+      - port: 8501
