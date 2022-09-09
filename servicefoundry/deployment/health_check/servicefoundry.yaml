@@ -1,0 +1,32 @@
+name: svc-health
+components:
+  - name: svc-health
+    type: service
+    image:
+      type: build
+      build_source:
+        type: local
+      build_spec:
+        type: tfy-python-buildpack
+        command: uvicorn main:app --port 8000 --host 0.0.0.0
+        pip_packages:
+          - fastapi==0.81.0
+          - uvicorn==0.18.3
+    ports:
+      - port: 8000
+    liveness_probe:
+      config:
+        type: http
+        path: /livez
+        port: 8000
+      initial_delay_seconds: 0
+      period_seconds: 10
+      timeout_seconds: 1
+      success_threshold: 1
+      failure_threshold: 3
+    readiness_probe:
+      config:
+        type: http
+        path: /readyz
+        port: 8000
+      period_seconds: 5
