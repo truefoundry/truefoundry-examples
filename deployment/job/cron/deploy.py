@@ -19,6 +19,9 @@ job = Job(
     name="iris-train-cron-job",
     image=image,
     env={"MLF_API_KEY": "tfy-secret://<YOUR_SECRET_FQN>"},
-    trigger=Schedule(schedule="0 */12 * * *"),
+    trigger=Schedule(
+        schedule="0 */12 * * *",
+        concurrency_policy="Forbid"
+    ),
 )
 job.deploy(workspace_fqn=args.workspace_fqn)
