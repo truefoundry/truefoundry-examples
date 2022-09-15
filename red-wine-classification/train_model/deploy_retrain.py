@@ -28,6 +28,7 @@ env = {
     "MLF_API_KEY": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY",
     "MLF_MODEL_FQN": args.model_fqn,
 }
+
 job = Job(
     name="red-wine-retrain-cron",
     image=Build(build_spec=python_build),
