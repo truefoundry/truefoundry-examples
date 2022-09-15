@@ -35,6 +35,6 @@ job = Job(
     resources=Resources(
         cpu_request="1", cpu_limit="1.5", memory_request="500", memory_limit="1500"
     ),
-    trigger=Schedule(schedule="* */12 * * *"),
+    trigger=Schedule(schedule="0 */12 * * *"),
 )
 job.deploy(workspace_fqn=args.workspace_fqn)
