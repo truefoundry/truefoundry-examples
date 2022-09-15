@@ -20,7 +20,7 @@ job = Job(
     image=image,
     env={"MLF_API_KEY": "tfy-secret://<YOUR_SECRET_FQN>"},
     trigger=Schedule(
-        schedule="0 */12 * * *",
+        schedule="0 8 1 * *",
         concurrency_policy="Forbid"
     ),
 )
