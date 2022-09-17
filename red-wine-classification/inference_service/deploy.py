@@ -27,9 +27,7 @@ service = Service(
     image=Build(
         build_spec=PythonBuild(
             command="uvicorn main:app --port 4000 --host 0.0.0.0",
-            requirements_path="requirements.txt",
             python_version="3.9",
-            build_context_path="./",
         ),
     ),
     env={
@@ -38,10 +36,9 @@ service = Service(
         "MLF_API_KEY": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY",
         "MLF_MODEL_VERSION_FQN": args.model_version_fqn,
     },
-    ports=[{"expose": True, "port": 4000}],
-    replicas=2,
+    ports=[{"port": 4000}],
     resources=Resources(
-        cpu_request=0.08, cpu_limit=1.5, memory_limit=2500, memory_request=1500
+        cpu_request=0.5, cpu_limit=1.5, memory_limit=2500, memory_request=1500
     ),
 )
 service.deploy(workspace_fqn=args.workspace_fqn)

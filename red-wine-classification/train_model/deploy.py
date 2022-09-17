@@ -13,8 +13,7 @@ args = parser.parse_args()
 # servicefoundry uses this specification to automatically create a Dockerfile and build an image,
 python_build = PythonBuild(
     python_version="3.9",
-    command="python run.py",
-    requirements_path="requirements.txt",
+    command="python main.py",
 )
 env = {
     # These will automatically map the secret value to the environment variable.
@@ -26,7 +25,7 @@ job = Job(
     image=Build(build_spec=python_build),
     env=env,
     resources=Resources(
-        cpu_request="1", cpu_limit="1.5", memory_request="500", memory_limit="1500"
+        cpu_request=1, cpu_limit=1.5, memory_request=1000, memory_limit=1500
     ),
 )
 job.deploy(workspace_fqn=args.workspace_fqn)

@@ -7,4 +7,4 @@ scikit-learn==1.1.2
 mlfoundry>=0.4.3,<0.5
 
 # deployments
-servicefoundry>=0.1.91,<0.2.0
+servicefoundry>=0.1.97,<0.2.0

@@ -18,7 +18,7 @@ args = parser.parse_args()
 logging.basicConfig(level=logging.INFO)
 
 job = Job(
-    name="red-wine-data-cron",
+    name="red-wine-data-feeder",
     image=Build(
         build_spec=PythonBuild(command="python main.py"),
     ),
@@ -27,6 +27,6 @@ job = Job(
         "MLF_HOST": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_HOST",
         "MLF_API_KEY": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY",
     },
-    trigger=Schedule(schedule="*/20 * * * *"),
+    trigger=Schedule(schedule="*/10 * * * *"),
 )
 job.deploy(workspace_fqn=args.workspace_fqn)

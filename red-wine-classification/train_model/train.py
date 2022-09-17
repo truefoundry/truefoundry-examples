@@ -10,21 +10,19 @@ def train_model(X_train, y_train, X_test=None, y_test=None):
     pipeline = make_pipeline(MinMaxScaler(), RandomForestClassifier(random_state=42))
     hyperparameters = {
         "randomforestclassifier__max_depth": [None, 2, 5, 10],
-        "randomforestclassifier__max_features": [None, "sqrt", "log2"],
         "randomforestclassifier__n_estimators": [25, 50, 100],
     }
     model = GridSearchCV(
         pipeline,
         hyperparameters,
         cv=5,
-        refit=True,
         n_jobs=4,
-        return_train_score=True,
         verbose=True,
     )
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_train)
+    print("Classification Report on Train Data")
     print(classification_report(y_true=y_train, y_pred=y_pred))
     metadata["train_report"] = classification_report(
         y_true=y_train, y_pred=y_pred, output_dict=True
@@ -32,6 +30,7 @@ def train_model(X_train, y_train, X_test=None, y_test=None):
 
     if X_test is not None and y_test is not None:
         y_pred = model.predict(X_test)
+        print("Classification Report on Test Data")
         print(classification_report(y_true=y_test, y_pred=y_pred))
         metadata["test_report"] = classification_report(
             y_true=y_test, y_pred=y_pred, output_dict=True
