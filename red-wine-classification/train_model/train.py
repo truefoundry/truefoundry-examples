@@ -20,7 +20,6 @@ def train_model(X_train, y_train, X_test=None, y_test=None):
         verbose=True,
     )
     model.fit(X_train, y_train)
-
     y_pred = model.predict(X_train)
     print("Classification Report on Train Data")
     print(classification_report(y_true=y_train, y_pred=y_pred))

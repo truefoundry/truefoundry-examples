@@ -2,7 +2,9 @@ import os
 import time
 import mlfoundry
 from data import append_inference_data, get_initial_data
+from datetime import datetime
 from train import train_model
+from sklearn.metrics import accuracy_score, f1_score
 
 s = time.time()
 # if not NONE, it is used for getting inference data for Retraining the model
@@ -18,13 +20,41 @@ if MODEL_FQN:
     )
 
 model, metadata = train_model(X_train, y_train, X_test, y_test)
+e = time.time()
+
+print(f"################### Time taken to log models {e-s} ")
+
 features = [{"name": column, "type": "float"} for column in X_train.columns]
 schema = {"features": features, "prediction": "categorical"}
 print(f"Schema: {schema}")
-e = time.time()
-print(f"################### Time taken to log models {e-s} ")
+
+y_pred_train = model.predict(X_train)
+y_pred_test = model.predict(X_test)
+
+# logging the data for experiment tracking
 # You can push the model to your choice of storage or model registry.
-run = mlfoundry.get_client().create_run(project_name="red-wine-quality-demo")
+run = mlfoundry.get_client().create_run(project_name="red-wine-quality-demo", run_name=f"train-{datetime.now().strftime('%m-%d-%Y')}" if not MODEL_FQN else f"retrain-{datetime.now().strftime('%m-%d-%Y')}")
+run.log_params(model.get_params())
+run.log_metrics({
+    'train/accuracy_score': accuracy_score(y_train, y_pred_train),
+    'train/f1': f1_score(y_train, y_pred_train, average='weighted'),
+    'test/accuracy_score': accuracy_score(y_test, y_pred_test),
+    'test/f1': f1_score(y_test, y_pred_test, average='weighted'),
+})
+
+run.log_dataset(
+    dataset_name='train',
+    features=X_train,
+    predictions=y_pred_train,
+    actuals=y_train,
+)
+run.log_dataset(
+    dataset_name='test',
+    features=X_test,
+    predictions=y_pred_test,
+    actuals=y_test,
+)
+
 model_version = run.log_model(
     name="red-wine-quality-classifier",
     model=model,
