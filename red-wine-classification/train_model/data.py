@@ -12,7 +12,7 @@ def append_inference_data(X_train, y_train, model_fqn):
     client = mlf.get_client()
     inference_data = client.get_inference_dataset(
         model_fqn=model_fqn,
-        start_time=datetime.now(timezone.utc) - timedelta(days=1),
+        start_time=datetime.now(timezone.utc) - timedelta(days=7),
         actual_value_required=True,
     )
 

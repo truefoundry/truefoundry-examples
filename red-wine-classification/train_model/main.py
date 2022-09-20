@@ -1,9 +1,10 @@
 import os
-
+import time
 import mlfoundry
 from data import append_inference_data, get_initial_data
 from train import train_model
 
+s = time.time()
 # if not NONE, it is used for getting inference data for Retraining the model
 MODEL_FQN = os.getenv("MLF_MODEL_FQN")
 
@@ -20,7 +21,8 @@ model, metadata = train_model(X_train, y_train, X_test, y_test)
 features = [{"name": column, "type": "float"} for column in X_train.columns]
 schema = {"features": features, "prediction": "categorical"}
 print(f"Schema: {schema}")
-
+e = time.time()
+print(f"################### Time taken to log models {e-s} ")
 # You can push the model to your choice of storage or model registry.
 run = mlfoundry.get_client().create_run(project_name="red-wine-quality-demo")
 model_version = run.log_model(

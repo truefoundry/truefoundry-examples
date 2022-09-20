@@ -1,4 +1,5 @@
 import os
+import time
 import uuid
 from typing import List
 
@@ -38,6 +39,7 @@ class WinePredictionRequest(BaseModel):
 
 @app.post("/predict")
 def predict(inference_requests: List[WinePredictionRequest]):
+    s = time.time()
     predictions = []
     prediction_logs = []
     data_ids_list = [request.data_id for request in inference_requests]
@@ -72,7 +74,9 @@ def predict(inference_requests: List[WinePredictionRequest]):
                 },
             )
         )
+    e = time.time()
     client.log_predictions(
         model_version_fqn=MODEL_VERSION_FQN, predictions=prediction_logs
     )
+    print(f"Made {len(prediction_logs)} predictions in {e-s} seconds")
     return predictions

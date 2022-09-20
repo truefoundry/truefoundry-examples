@@ -21,7 +21,7 @@ env = {
     "MLF_API_KEY": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY",
 }
 job = Job(
-    name="red-wine-train-job",
+    name="red-wine-train",
     image=Build(build_spec=python_build),
     env=env,
     resources=Resources(
