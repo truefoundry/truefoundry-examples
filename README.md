@@ -6,3 +6,5 @@ This repository contains projects using TrueFoundry platform to train and deploy
 1. Image Segmentation
 1. Question Answering
 1. Ranking
+
+ADD A NEW TEST
