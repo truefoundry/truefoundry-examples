@@ -1,0 +1,13 @@
+pandas==1.4.4
+numpy==1.22.4
+imbalanced-learn==0.9.1
+scikit-learn==1.1.2
+fastapi==0.82.0
+uvicorn==0.18.3
+pydantic==1.10.2
+
+# experiment tracking
+mlfoundry>=0.4.3,<0.5
+
+# deployments
+servicefoundry>=0.2.9
