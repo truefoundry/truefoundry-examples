@@ -11,8 +11,8 @@ components:
         command: uvicorn main:app --port 8000 --host 0.0.0.0
     env:
       TFY_MODEL_VERSION_FQN: model:truefoundry/user-truefoundry/iris-clf-demo/iris-model-demo:1
-      TFY_API_KEY: djE6dHJ1ZWZvdW5kcnk6dXNlci10cnVlZm91bmRyeTo0MTZjOTA=
-      TFY_HOST: https://app.develop.truefoundry.tech
+      TFY_API_KEY: <paste your api key here>
+      TFY_HOST: <paste the tfy host, eg: https://app.truefoundry.com>
     ports:
       - port: 8000
     resources:
