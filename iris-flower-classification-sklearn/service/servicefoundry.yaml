@@ -10,11 +10,11 @@ components:
         type: tfy-python-buildpack
         command: uvicorn main:app --port 8000 --host 0.0.0.0
     env:
-      TFY_MODEL_VERSION_FQN: model:truefoundry/user-truefoundry/iris-clf-demo/iris-model-demo:1
-      TFY_API_KEY: <paste your api key here>
-      TFY_HOST: <paste the tfy host, eg: https://app.truefoundry.com>
+      TFY_MODEL_VERSION_FQN: model:truefoundry/user-truefoundry/iris-clf-demo/iris-model-demo
+      TFY_API_KEY: <paste the api key here>
+      TFY_HOST: <paste your tfy host here, eg. https://app.truefoundry.com>
     ports:
       - port: 8000
     resources:
-      memory_limit: 1500
-      memory_request: 1000
+      memory_limit: 512
+      memory_request: 256
