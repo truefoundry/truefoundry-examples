@@ -22,10 +22,8 @@ CLASS_NAMES = ['setosa', 'versicolor', 'virginica']
 def _get_model():
     global _model
     if _model is None:
-        api_key = os.environ.get('TFY_API_KEY')
-        host=os.environ.get('TFY_HOST')
         model_version_fqn = os.environ.get('TFY_MODEL_VERSION_FQN')
-        client = mlf.get_client(tracking_uri=host, api_key=api_key)
+        client = mlf.get_client()
         _model = client.get_model(model_version_fqn).load()
         
     return _model
