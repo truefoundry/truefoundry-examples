@@ -24,7 +24,7 @@ job = Job(
     ),
     env={
         "INFERENCE_SERVER_URL": args.inference_server_url,
-        "MLF_HOST": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_HOST",
+        "MLF_HOST": "https://app.develop.truefoundry.tech",
         "MLF_API_KEY": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY",
     },
     trigger=Schedule(schedule="*/10 * * * *"),
