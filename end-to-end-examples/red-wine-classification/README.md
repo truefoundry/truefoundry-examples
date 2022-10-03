@@ -1,5 +1,12 @@
 # Red Wine Classification Problem
 
+## Demo Video
+[![Wine Classification demo](https://github.com/truefoundry/truefoundry-examples/tree/red-wine-kaggle/end-to-end-examples/red-wine-classification/demo-wine.png)](https://www.youtube.com/watch?v=ZnjsA78RuI4 "Demo-Problem-Statement-Iris-Deployment-Monitoring")
+
+### [Link to Live demo](www.truefoundry.com)
+
+### [Blog with instructions on the run](www.truefoundry.com)
+
 ## Description of the Problem
 The aim of the problem is to predict the quality of red-wine as a number between 0-10 with input features like pH, density etc of red-wine.
 
@@ -9,7 +16,7 @@ Here is the Link to the dataset:  https://www.kaggle.com/code/sevilcoskun/red-wi
 
 ![img.png](../assets/img.png)
 
-Size of dataset: 100.95 kb
+Size of dataset: 100.95 kb 
 Number of Unique Rows: 1599
 Total Columns: 12 (11 input features, one the target quality value)
 
@@ -49,11 +56,15 @@ predictions_list = requests.post(
 
 ## Steps to run
 
+// Can add >> 1) Create account on truefoundry 
+// To train model ABC run sfy ABC
+// To deploy as a service
+
 Install and setup servicefoundry on your computer.
 
 ```commandline
 pip install servicefoundry
-servicefoundry use server https://app.develop.truefoundry,tech
+servicefoundry use server https://app.develop.truefoundry.tech
 servicefoundry login
 ```
 

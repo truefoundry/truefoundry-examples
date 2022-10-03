@@ -1,12 +1,13 @@
 import os
 import time
 import mlfoundry
-from dataset import append_inference_data, get_initial_data
 from datetime import datetime
 from train_model import train_model
 from sklearn.metrics import accuracy_score, f1_score
+from dataset import get_initial_data
 
 s = time.time()
+
 # You can bring data from your own sources
 X_train, X_test, y_train, y_test = get_initial_data(test_size=0.1, random_state=42)
 

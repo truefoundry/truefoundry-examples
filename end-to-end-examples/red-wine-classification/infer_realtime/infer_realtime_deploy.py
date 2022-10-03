@@ -26,7 +26,7 @@ service = Service(
     name="red-wine-prediction",
     image=Build(
         build_spec=PythonBuild(
-            command="uvicorn main:app --port 4000 --host 0.0.0.0",
+            command="uvicorn infer_realtime:app --port 4000 --host 0.0.0.0",
             python_version="3.9",
         ),
     ),
