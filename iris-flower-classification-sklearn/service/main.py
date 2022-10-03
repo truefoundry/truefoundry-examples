@@ -6,12 +6,13 @@ import mlfoundry as mlf
 from fastapi import Body
 from pydantic import BaseModel
 from starlette.responses import RedirectResponse 
-from servicefoundry.service import fastapi
+from fastapi import FastAPI
 
 
 logger = logging.getLogger(__name__)
 
-app = fastapi.app()
+app = FastAPI(docs_url="/")
+
 
 
 _model = None
@@ -22,10 +23,11 @@ def _get_model():
     global _model
     if _model is None:
         api_key = os.environ.get('TFY_API_KEY')
-        run_id = os.environ.get('TFY_RUN_ID')
-        client = mlf.get_client(api_key=api_key)
-        run = client.get_run(run_id)
-        _model = run.get_model()
+        host=os.environ.get('TFY_HOST')
+        model_version_fqn = os.environ.get('TFY_MODEL_VERSION_FQN')
+        client = mlf.get_client(tracking_uri=host, api_key=api_key)
+        _model = client.get_model(model_version_fqn).load()
+        
     return _model
 
 
