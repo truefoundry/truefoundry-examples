@@ -130,20 +130,66 @@ predictions_list = requests.post(
 <details>
 <summary><b><font size="5">Running batch inference</font></b></summary>
 
+Note: <i>It is necessary to deploy live inference model before being able to deploy it as a service</i>
+
 1. Change working directory to infer_batch folder
     ```commandline
     cd infer_batch
     ```
-2. Create (workspace)[https://docs.truefoundry.com/documentation/deploy/concepts/workspace] and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
+2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
 3. Replace the ``MLF_API_KEY`` value in the infer_realtime_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
 4. Copy the workspace_fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
-
+5. Copy the inference_server_url from:
+   * Go to deployment [tab of TrueFoundry](https://app.develop.truefoundry.tech/applications)
+   * Open the service that was deployment as live inference model <i>("red-wine-prediction" by default)</i>
+   * Copy the Endpoint link
+6. To deploy using python script:
+   ```commandline
+   python infer_batch_deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --inference_server_url <YOUR_INFERENCE_SERVER_URL>
+   ```
+   To deploy using CLI:
+   ```commandline
+   servicefoundry deploy --file infer_batch_deploy.yaml --workspace_fqn <YOUR_WORKSPACE_FQN> --inference_server_url <YOUR_INFERENCE_SERVER_URL>
+   ```
+6. Click on the dashboard link in the terminal
+7. Click on the <b>"Trigger Job"</b> on the dashboard to run the batch inference job
 
 </details>
 
 <details>
 <summary><b><font size="5">Retraining Model </font></b></summary>
+Note: <i>It is necessary to train a model before being able to deploy it as a service</i>
+1. Change working directory to retrain folder
+    ```commandline
+    cd retrain
+    ```
+2. Create (workspace)[https://docs.truefoundry.com/documentation/deploy/concepts/workspace] and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
+3. Replace the ``MLF_API_KEY`` value in the retrain_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
+4. Copy the workspace_fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
+5. Find the model_version_fqn of the model that you want to deploy from
+   
+   * Go to experiments [tracking tab of TrueFoundry](https://app.develop.truefoundry.tech/mlfoundry)
+   * Click on the project name that you trained (<i>red-wine-quality-demo by default</i>)
+   * Click on models tab
+   * Click on the model name to the model trained to open the tab showing different versions of the model
+   * Copy the FQN of the latest version of the model
+  
+
+6. To deploy using python script:
+   ```commandline
+   python retrain_deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --model_version_fqn <YOUR_MODEL_VERSION_FQN>
+   ```
+   To deploy using CLI:
+   ```commandline
+   servicefoundry deploy --file retrain_deploy.yaml --workspace_fqn <YOUR_WORKSPACE_FQN> --model_version_fqn <YOUR_MODEL_VERSION_FQN>
+   ```
+7. Click on the <b>"Trigger Job"</b> on the dashboard to run model retraining job
 
 
+
+</details>
+
+<details>
+<summary><b><font size="5">Deploying Demo </font></b></summary>
 
 </details>
