@@ -1,4 +1,4 @@
-name: iris-train-cron-job
+name: red-wine-batch
 components:
 - name: iris-train-cron-job
   type: job
