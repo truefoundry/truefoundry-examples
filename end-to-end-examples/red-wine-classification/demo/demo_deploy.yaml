@@ -2,8 +2,7 @@ name: red-wine-demo
 components:
   - env:
       MLF_HOST: https://app.develop.truefoundry.tech
-      MODEL_URL: >-
-        https://red-wine-prediction-kaggle-ws.tfy-ctl-euwe1-develop.develop.truefoundry.tech
+      INFERENCE_SERVER_URL: <paste your inference server url here>
       MLF_API_KEY: tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY
     name: red-wine-demo
     type: service
