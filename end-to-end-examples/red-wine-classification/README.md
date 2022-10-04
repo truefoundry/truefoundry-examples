@@ -9,11 +9,11 @@
 #### [Blog with instructions on the run](www.truefoundry.com)
 
 ## Description of the Problem
----
+
 The aim of the problem is to predict the quality of red-wine as a number between 0-10 with input features like pH, density etc of red-wine.
 
 ## Dataset Description
----
+
 Here is the Link to the dataset:  https://www.kaggle.com/code/sevilcoskun/red-wine-quality-classification/data
 
 ![img.png](../assets/img.png)
@@ -23,10 +23,11 @@ Number of Unique Rows: 1599
 Total Columns: 12 (11 input features, one the target quality value)
 
 ## Model Trained
----
+
 The model trained is a RandomForestClassifier. 
 The model is trained using sklearn and we have used GridSearchCV for hyperparameter tuning.
 
+## Instructions
 
 <details>
 <summary><b><font size="5">Setting up servicefoundry</font></b></summary>
@@ -49,7 +50,7 @@ To deploy using the python API run the following command in terminal
     ```commandline
     cd train
     ```
-2. Create (workspace)[https://docs.truefoundry.com/documentation/deploy/concepts/workspace] and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
+2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
 3. Replace the ``MLF_API_KEY`` value in the train_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
 4. Copy the workspace fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
 5. To deploy using python script:
@@ -72,7 +73,7 @@ Note: <i>It is necessary to train a model before being able to deploy it as a se
     ```commandline
     cd infer_realtime
     ```
-2. Create (workspace)[https://docs.truefoundry.com/documentation/deploy/concepts/workspace] and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
+2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
 3. Replace the ``MLF_API_KEY`` value in the infer_realtime_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
 4. Copy the workspace_fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
 5. Find the model_version_fqn of the model that you want to deploy from
@@ -158,12 +159,13 @@ Note: <i>It is necessary to deploy live inference model before being able to dep
 
 <details>
 <summary><b><font size="5">Retraining Model </font></b></summary>
+
 Note: <i>It is necessary to train a model before being able to deploy it as a service</i>
 1. Change working directory to retrain folder
     ```commandline
     cd retrain
     ```
-2. Create (workspace)[https://docs.truefoundry.com/documentation/deploy/concepts/workspace] and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
+2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
 3. Replace the ``MLF_API_KEY`` value in the retrain_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
 4. Copy the workspace_fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
 5. Find the model_version_fqn of the model that you want to deploy from
