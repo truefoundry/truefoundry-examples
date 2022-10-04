@@ -4,7 +4,7 @@
 
 [![Wine Classification demo](https://i.ytimg.com/an_webp/ZnjsA78RuI4/mqdefault_6s.webp?du=3000&sqp=CKKe65kG&rs=AOn4CLBaOtFI7tmhZgQp3TOXzO714IDWug)](https://www.youtube.com/watch?v=ZnjsA78RuI4 "Demo-Problem-Statement-Iris-Deployment-Monitoring")
 
-#### [Link to Live demo](www.truefoundry.com)
+#### [Link to Live demo](https://red-wine-demo-kaggle-ws.tfy-ctl-euwe1-develop.develop.truefoundry.tech/)
 
 #### [Blog with instructions on the run](www.truefoundry.com)
 
@@ -193,5 +193,30 @@ Note: <i>It is necessary to train a model before being able to deploy it as a se
 
 <details>
 <summary><b><font size="5">Deploying Demo </font></b></summary>
+
+Note: <i>It is necessary to deploy live inference model before being able to deploy a demo</i>
+
+1. Change working directory to infer_batch folder
+    ```commandline
+    cd demo
+    ```
+2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
+3. Replace the ``MLF_API_KEY`` value in the infer_realtime_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
+4. Copy the workspace_fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
+5. Copy the inference_server_url from:
+   * Go to deployment [tab of TrueFoundry](https://app.develop.truefoundry.tech/applications)
+   * Open the service that was deployment as live inference model <i>("red-wine-prediction" by default)</i>
+   * Copy the Endpoint link
+6. To deploy using python script:
+   ```commandline
+   python demo_deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --inference_server_url <YOUR_INFERENCE_SERVER_URL>
+   ```
+   To deploy using CLI:
+   ```commandline
+   servicefoundry deploy --file demo_deploy.yaml --workspace_fqn <YOUR_WORKSPACE_FQN> --inference_server_url <YOUR_INFERENCE_SERVER_URL>
+   ```
+6. Click on the dashboard link in the terminal
+7. Click on the <b>"Endpoint"</b> link on the dashboard to open the streamlit demo
+
 
 </details>
