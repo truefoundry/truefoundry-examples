@@ -18,13 +18,13 @@ args = parser.parse_args()
 logging.basicConfig(level=logging.INFO)
 
 job = Job(
-    name="red-wine-data-feeder",
+    name="red-wine-batch",
     image=Build(
-        build_spec=PythonBuild(command="python main.py"),
+        build_spec=PythonBuild(command="python infer_batch.py"),
     ),
     env={
         "INFERENCE_SERVER_URL": args.inference_server_url,
-        "MLF_HOST": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_HOST",
+        "MLF_HOST": "https://app.develop.truefoundry.tech",
         "MLF_API_KEY": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY",
     },
     trigger=Schedule(schedule="*/10 * * * *"),

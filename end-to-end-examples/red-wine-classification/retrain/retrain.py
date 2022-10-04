@@ -1,23 +1,22 @@
 import os
 import time
 import mlfoundry
-from data import append_inference_data, get_initial_data
+from dataset import append_inference_data, get_initial_data
 from datetime import datetime
-from train import train_model
+from train_model import train_model
 from sklearn.metrics import accuracy_score, f1_score
 
 s = time.time()
-# if not NONE, it is used for getting inference data for Retraining the model
+# it is used for getting inference data for Retraining the model
 MODEL_FQN = os.getenv("MLF_MODEL_FQN")
 
 # You can bring data from your own sources
 X_train, X_test, y_train, y_test = get_initial_data(test_size=0.1, random_state=42)
 
 # fetch inference data for retraining the model on the combined dataset
-if MODEL_FQN:
-    X_train, y_train = append_inference_data(
-        X_train=X_train, y_train=y_train, model_fqn=MODEL_FQN
-    )
+X_train, y_train = append_inference_data(
+    X_train=X_train, y_train=y_train, model_fqn=MODEL_FQN
+)
 
 model, metadata = train_model(X_train, y_train, X_test, y_test)
 e = time.time()
@@ -33,7 +32,7 @@ y_pred_test = model.predict(X_test)
 
 # logging the data for experiment tracking
 # You can push the model to your choice of storage or model registry.
-run = mlfoundry.get_client().create_run(project_name="red-wine-quality-demo", run_name=f"train-{datetime.now().strftime('%m-%d-%Y')}" if not MODEL_FQN else f"retrain-{datetime.now().strftime('%m-%d-%Y')}")
+run = mlfoundry.get_client().create_run(project_name="red-wine-quality-demo", run_name=f"retrain-{datetime.now().strftime('%m-%d-%Y')}")
 run.log_params(model.get_params())
 run.log_metrics({
     'train/accuracy_score': accuracy_score(y_train, y_pred_train),

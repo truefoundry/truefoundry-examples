@@ -1,0 +1,19 @@
+name: red-wine-batch
+components:
+- name: iris-train-cron-job
+  type: job
+  image:
+    type: build
+    build_source:
+      type: local
+    build_spec:
+      type: tfy-python-buildpack
+      command: python infer_batch.py
+  env:
+    MLF_HOST: https://app.develop.truefoundry.tech
+    MLF_API_KEY: tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY
+    INFERENCE_SERVER_URL: <paste inference server url here>
+  trigger:
+    type: scheduled
+    schedule: "*/10 * * * *"
+    concurrency_policy: "Forbid"

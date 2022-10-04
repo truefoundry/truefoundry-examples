@@ -1,0 +1,9 @@
+pandas==1.4.4
+
+# for experiment tracking and model registry
+mlfoundry>=0.4.3,<0.5
+
+# for deploying our job deployments
+servicefoundry>=0.1.97,<0.2.0
+
+streamlit>=1.13.0

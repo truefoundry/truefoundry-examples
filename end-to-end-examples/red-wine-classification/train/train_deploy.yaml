@@ -1,0 +1,14 @@
+name: red-wine-train
+components:
+- name: red-wine-train
+  type: job
+  image:
+    type: build
+    build_source:
+      type: local
+    build_spec:
+      type: tfy-python-buildpack
+      command: python train.py
+  env:
+    MLF_HOST: https://app.develop.truefoundry.tech
+    MLF_API_KEY: tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY

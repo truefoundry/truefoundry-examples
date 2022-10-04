@@ -19,16 +19,16 @@ args = parser.parse_args()
 # servicefoundry uses this specification to automatically create a Dockerfile and build an image,
 python_build = PythonBuild(
     python_version="3.9",
-    command="python main.py",
+    command="python retrain.py",
 )
 env = {
     # These will automatically map the secret value to the environment variable.
-    "MLF_HOST": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_HOST",
+    "MLF_HOST": "https://app.develop.truefoundry.tech",
     "MLF_API_KEY": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY",
     "MLF_MODEL_FQN": args.model_fqn,
 }
 job = Job(
-    name="red-wine-retrain-cron",
+    name="red-wine-retrain",
     image=Build(build_spec=python_build),
     env=env,
     resources=Resources(
