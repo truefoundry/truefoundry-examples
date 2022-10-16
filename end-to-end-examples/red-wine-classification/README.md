@@ -1,10 +1,8 @@
 # Red Wine Classification Problem
 
-## Demo Video
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1wK5RdDea-yebeBJsyRqE1ROMBrIw_Dsm?usp=sharing)
 
-[![Wine Classification demo](https://i.ytimg.com/an_webp/ZnjsA78RuI4/mqdefault_6s.webp?du=3000&sqp=CKKe65kG&rs=AOn4CLBaOtFI7tmhZgQp3TOXzO714IDWug)](https://www.youtube.com/watch?v=ZnjsA78RuI4 "Demo-Problem-Statement-Iris-Deployment-Monitoring")
-
-#### [Link to Live demo](https://red-wine-demo-kaggle-ws.tfy-ctl-euwe1-develop.develop.truefoundry.tech/)
+#### [Link to Live demo](https://red-wine-demo-demos.tfy-ctl-euwe1-production.production.truefoundry.com/)
 
 #### [Blog with instructions on the run](www.truefoundry.com)
 
