@@ -1,4 +1,5 @@
 *.py[cod]
 .*/
+!.github
 .servicefoundry
 .DS_Store
