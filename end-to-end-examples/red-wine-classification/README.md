@@ -4,7 +4,7 @@
 
 #### [Link to Live demo](https://red-wine-demo-demos.tfy-ctl-euwe1-production.production.truefoundry.com/)
 
-#### [Blog with instructions on the run](www.truefoundry.com)
+#### [TrueFoundry](www.truefoundry.com)
 
 ## Description of the Problem
 
