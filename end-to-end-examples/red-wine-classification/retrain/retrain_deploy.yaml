@@ -10,8 +10,8 @@ components:
       type: tfy-python-buildpack
       command: python retrain.py
   env:
-    MLF_HOST: https://app.develop.truefoundry.tech
-    MLF_API_KEY: tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY
+    TFY_HOST: tfy-secret://user-truefoundry:red-wine-sg:TFY_HOST
+    TFY_API_KEY: tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY
     MLF_MODEL_FQN: <paste model fqn here>
   trigger:
     type: scheduled

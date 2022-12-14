@@ -32,8 +32,8 @@ service = Service(
     ),
     env={
         # These will automatically map the secret value to the environment variable.
-        "MLF_HOST": "https://app.develop.truefoundry.tech",
-        "MLF_API_KEY": "tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY",
+        "TFY_API_KEY": "tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY",
+        "TFY_HOST": "tfy-secret://user-truefoundry:red-wine-sg:TFY_HOST",
         "MLF_MODEL_VERSION_FQN": args.model_version_fqn,
     },
     ports=[{"port": 4000}],

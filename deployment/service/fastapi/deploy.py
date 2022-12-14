@@ -14,4 +14,4 @@ service = Service(
     resources=Resources(memory_limit=1500, memory_request=1000),
 )
 # service.deploy(workspace_fqn="YOUR_WORKSPACE_FQN")
-service.deploy(workspace_fqn="v1:local:my-ws-2")
+service.deploy(workspace_fqn="v1:local:srihari-ws")

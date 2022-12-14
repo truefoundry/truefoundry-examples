@@ -1,0 +1,8 @@
+torch
+torchvision
+sklearn
+mlfoundry
+matplotlib
+seaborn
+plotly
+ipywidgets
