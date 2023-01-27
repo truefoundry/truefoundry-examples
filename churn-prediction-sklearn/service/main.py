@@ -1,13 +1,13 @@
-import logging
 import os
+import logging
 from typing import List, Optional
 
 import mlfoundry as mlf
 from pydantic import BaseModel
 from starlette.responses import RedirectResponse 
-from servicefoundry.service import fastapi
+from fastapi import FastAPI
 
-app = fastapi.app()
+app = FastAPI(root_path=os.getenv("TFY_SERVICE_ROOT_PATH"), docs_url="/")
 
 CLASS_NAMES = ['no', 'yes']
 
@@ -17,9 +17,8 @@ _model = None
 def _get_model():
     global _model
     if _model is None:
-        api_key = os.environ.get('TFY_API_KEY')
         run_id = os.environ.get('TFY_RUN_ID')
-        client = mlf.get_client(api_key=api_key)
+        client = mlf.get_client()
         run = client.get_run(run_id)
         _model = run.get_model()
     return _model

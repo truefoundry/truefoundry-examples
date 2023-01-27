@@ -1,22 +1,20 @@
 name: churn-prediction-svc
-components:
-  - name: churn-prediction-svc
-    type: service
-    image:
-      type: build
-      build_source:
-        type: local
-      build_spec:
-        type: tfy-python-buildpack
-        python_version: 3.7
-        command: uvicorn main:app --port 8000 --host 0.0.0.0
-    resources:
-      cpu_request: 50m
-      cpu_limit: 100m
-      memory_request: 128Mi
-      memorty_limit: 512Mi
-    ports:
-      - port: 8000
-    env:
-    - name: TFY_RUN_ID
-      value: b48ce55d9b1a4ca9ab314885aa2cb90e
+type: service
+image:
+  type: build
+  build_source:
+    type: local
+  build_spec:
+    type: tfy-python-buildpack
+    python_version: 3.9
+    command: uvicorn main:app --port 8000 --host 0.0.0.0
+resources:
+  cpu_request: 0.05
+  cpu_limit: 0.1
+  memory_request: 128
+  memorty_limit: 512
+ports:
+  - port: 8000
+env:
+- name: TFY_RUN_ID
+  value: b48ce55d9b1a4ca9ab314885aa2cb90e
