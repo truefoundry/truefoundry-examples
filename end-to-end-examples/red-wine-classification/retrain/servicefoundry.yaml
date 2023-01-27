@@ -9,7 +9,7 @@ image:
     command: python retrain.py
 env:
   TFY_API_KEY: tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY
-  MLF_MODEL_FQN: <paste model fqn here>
+  MLF_MODEL_FQN: <paste model fqn here, excluding the version number>
 trigger:
   type: scheduled
   schedule: "0 0 * * 0"
