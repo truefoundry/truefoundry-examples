@@ -16,5 +16,4 @@ resources:
 ports:
   - port: 8000
 env:
-- name: TFY_RUN_ID
-  value: b48ce55d9b1a4ca9ab314885aa2cb90e
+  TFY_RUN_ID: b48ce55d9b1a4ca9ab314885aa2cb90e

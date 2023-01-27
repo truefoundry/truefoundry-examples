@@ -16,5 +16,4 @@ resources:
 ports:
   - port: 8080
 env:
-  - name: WANDB_API_KEY
-    value: <your-wandb-api-key>
+  - WANDB_API_KEY: <your-wandb-api-key>

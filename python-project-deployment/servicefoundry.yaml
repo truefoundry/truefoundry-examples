@@ -1,20 +1,18 @@
 name: flask-svc
-components:
-  - name: flask-svc
-    type: service
-    image:
-      type: build
-      build_source:
-        type: local
-      build_spec:
-        type: tfy-python-buildpack
-        python_version: 3.9
-        command: python main.py
-    resources:
-      cpu_request: 50m
-      cpu_limit: 100m
-      memory_request: 128Mi
-      memorty_limit: 512Mi
-    ports:
-      - port: 8080
+type: service
+image:
+  type: build
+  build_source:
+    type: local
+  build_spec:
+    type: tfy-python-buildpack
+    python_version: 3.9
+    command: python main.py
+resources:
+  cpu_request: 0.05
+  cpu_limit: 0.1
+  memory_request: 128
+  memory_limit: 512
+ports:
+  - port: 8080
 
