@@ -9,7 +9,7 @@ image:
     command: python infer_batch.py
 env:
   INFERENCE_SERVER_URL: "<Paste your realtime infer service API Endpoint>"
-  TFY_API_KEY: tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY
+  TFY_API_KEY: "<Paste your API KEY>"
 trigger:
   type: scheduled
   schedule: "*/10 * * * *"

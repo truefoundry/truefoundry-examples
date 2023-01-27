@@ -4,10 +4,6 @@
 
 [![Wine Classification demo](https://i.ytimg.com/an_webp/ZnjsA78RuI4/mqdefault_6s.webp?du=3000&sqp=CKKe65kG&rs=AOn4CLBaOtFI7tmhZgQp3TOXzO714IDWug)](https://www.youtube.com/watch?v=ZnjsA78RuI4 "Demo-Problem-Statement-Iris-Deployment-Monitoring")
 
-#### [Link to Live demo](https://red-wine-demo-kaggle-ws.tfy-ctl-euwe1-develop.develop.truefoundry.tech/)
-
-#### [Blog with instructions on the run](www.truefoundry.com)
-
 ## Description of the Problem
 
 The aim of the problem is to predict the quality of red-wine as a number between 0-10 with input features like pH, density etc of red-wine.
@@ -36,8 +32,7 @@ Install and setup servicefoundry on your computer.
 
 ```commandline
 pip install servicefoundry
-servicefoundry use server https://app.develop.truefoundry.tech
-servicefoundry login
+sfy login
 ```
 </details>
 
@@ -50,16 +45,19 @@ To deploy using the python API run the following command in terminal
     ```commandline
     cd train
     ```
-2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
-3. Replace the ``MLF_API_KEY`` value in the train_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
-4. Copy the workspace fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
+2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API Key](https://app.truefoundry.com/settings) on the TrueFoundry platform 
+3. Replace the value against `TFY_API_KEY` in the `deploy.py` file with the API Key found in [Settings Tab](https://app.truefoundry.com/settings) of your TrueFoundry account
+4. Copy the workspace fqn of the workspace that you want to use from the [Workspaces Tab](https://app.truefoundry.com/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
 5. To deploy using python script:
    ```commandline
-   python train_deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN>
+   python deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN>
    ```
    To deploy using CLI:
+   
+   > Replace values for `TFY_API_KEY` and in `servicefoundry.yaml`
+   
    ```commandline
-   servicefoundry deploy --file train_deploy.yaml --workspace_fqn <YOUR_WORKSPACE_FQN>
+   sfy deploy -f servicefoundry.yaml --workspace-fqn <YOUR_WORKSPACE_FQN>
    ```
 6. Click on the dashboard link in the terminal
 7. Click on the <b>"Trigger Job"</b> on the dashboard to run the training job
@@ -73,25 +71,30 @@ Note: <i>It is necessary to train a model before being able to deploy it as a se
     ```commandline
     cd infer_realtime
     ```
-2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
-3. Replace the ``MLF_API_KEY`` value in the infer_realtime_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
-4. Copy the workspace_fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
+2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API Key](https://app.truefoundry.com/settings) on the TrueFoundry platform 
+3. Replace the value against `TFY_API_KEY` in the `deploy.py` file with the API Key found in [Settings Tab](https://app.truefoundry.com/settings) of your TrueFoundry account
+
+4. Copy the workspace fqn of the workspace that you want to use from the [Workspaces Tab](https://app.truefoundry.com/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
+
 5. Find the model_version_fqn of the model that you want to deploy from
-   
-   * Go to experiments [tracking tab of TrueFoundry](https://app.develop.truefoundry.tech/mlfoundry)
+
+   * Go to  [Experiments Tracking tab of TrueFoundry](https://app.truefoundry.com/mlfoundry)
    * Click on the project name that you trained (<i>red-wine-quality-demo by default</i>)
    * Click on models tab
    * Click on the model name to the model trained to open the tab showing different versions of the model
    * Copy the FQN of the latest version of the model
-  
+
 
 6. To deploy using python script:
    ```commandline
-   python infer_realtime_deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --model_version_fqn <YOUR_MODEL_VERSION_FQN>
+   python deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --model_version_fqn <YOUR_MODEL_VERSION_FQN>
    ```
    To deploy using CLI:
+   
+   > Replace values for `TFY_API_KEY` and `MLF_MODEL_VERSION_FQN` in `servicefoundry.yaml`
+   
    ```commandline
-   servicefoundry deploy --file infer_realtime_deploy.yaml --workspace_fqn <YOUR_WORKSPACE_FQN> --model_version_fqn <YOUR_MODEL_VERSION_FQN>
+   sfy deploy -f servicefoundry.yaml --workspace-fqn <YOUR_WORKSPACE_FQN>
    ```
 7. Click on the dashboard link in the terminal to open the service deployment page with FastAPI EndPoint
 
@@ -105,7 +108,11 @@ This can either be done via the [fastapi endpoint](https://red-wine-prediction-t
 You can also query with python script:
 
 ```python
+import requests
+
+# Replace the below url with your own endpoint
 request_url = "https://red-wine-prediction-tfy-demo.tfy-ctl-euwe1-develop.develop.truefoundry.tech"
+
 features_list = [
     {
      'fixed_acidity': 7.5,
@@ -125,6 +132,7 @@ features_list = [
 predictions_list = requests.post(
     url=urljoin(request_url, "/predict"), json=features_list
 ).json()
+print(predictions_list)
 ```
 </details>
 
@@ -137,23 +145,28 @@ Note: <i>It is necessary to deploy live inference model before being able to dep
     ```commandline
     cd infer_batch
     ```
-2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
-3. Replace the ``MLF_API_KEY`` value in the infer_realtime_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
-4. Copy the workspace_fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
+2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API Key](https://app.truefoundry.com/settings) on the TrueFoundry platform 
+3. Replace the value against `TFY_API_KEY` in the `deploy.py` file with the API Key found in [Settings Tab](https://app.truefoundry.com/settings) of your TrueFoundry account
+
+4. Copy the workspace fqn of the workspace that you want to use from the [Workspaces Tab](https://app.truefoundry.com/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
+
 5. Copy the inference_server_url from:
-   * Go to deployment [tab of TrueFoundry](https://app.develop.truefoundry.tech/applications)
-   * Open the service that was deployment as live inference model <i>("red-wine-prediction" by default)</i>
-   * Copy the Endpoint link
+   * Go to  [Deployments Tab of TrueFoundry](https://app.truefoundry.com/deployments)
+   * Open the service that was deployment as live inference model <i>("red-wine-infer" by default)</i>
+   * Copy the Endpoint link and paste it as the value against `INFERENCE_SERVER_URL` in `deploy.py`
 6. To deploy using python script:
    ```commandline
-   python infer_batch_deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --inference_server_url <YOUR_INFERENCE_SERVER_URL>
+   python deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --inference_server_url <YOUR_INFERENCE_SERVER_URL>
    ```
    To deploy using CLI:
+
+   > Replace values for `TFY_API_KEY` and `INFERENCE_SERVER_URL` in `servicefoundry.yaml`
+
    ```commandline
-   servicefoundry deploy --file infer_batch_deploy.yaml --workspace_fqn <YOUR_WORKSPACE_FQN> --inference_server_url <YOUR_INFERENCE_SERVER_URL>
+   sfy deploy -f servicefoundry.yaml --workspace-fqn <YOUR_WORKSPACE_FQN>
    ```
-6. Click on the dashboard link in the terminal
-7. Click on the <b>"Trigger Job"</b> on the dashboard to run the batch inference job
+7. Click on the dashboard link in the terminal
+8. Click on the <b>"Trigger Job"</b> on the dashboard to run the batch inference job
 
 </details>
 
@@ -165,25 +178,30 @@ Note: <i>It is necessary to train a model before being able to deploy it as a se
     ```commandline
     cd retrain
     ```
-2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
-3. Replace the ``MLF_API_KEY`` value in the retrain_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
-4. Copy the workspace_fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
+2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API Key](https://app.truefoundry.com/settings) on the TrueFoundry platform 
+3. Replace the value against `TFY_API_KEY` in the `deploy.py` file with the API Key found in [Settings Tab](https://app.truefoundry.com/settings) of your TrueFoundry account
+
+4. Copy the workspace fqn of the workspace that you want to use from the [Workspaces Tab](https://app.truefoundry.com/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
+
 5. Find the model_version_fqn of the model that you want to deploy from
-   
-   * Go to experiments [tracking tab of TrueFoundry](https://app.develop.truefoundry.tech/mlfoundry)
+
+   * Go to experiments [tracking tab of TrueFoundry](https://app.truefoundry.com/mlfoundry)
    * Click on the project name that you trained (<i>red-wine-quality-demo by default</i>)
    * Click on models tab
    * Click on the model name to the model trained to open the tab showing different versions of the model
-   * Copy the FQN of the latest version of the model
-  
+   * Copy the FQN of the latest version of the model and paste it as the value against `MLF_MODEL_VERSION_FQN` in `deploy.py`
+
 
 6. To deploy using python script:
    ```commandline
-   python retrain_deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --model_version_fqn <YOUR_MODEL_VERSION_FQN>
+   python deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --model_version_fqn <YOUR_MODEL_VERSION_FQN>
    ```
    To deploy using CLI:
+   
+   > Replace values for `TFY_API_KEY` and `MLF_MODEL_VERSION_FQN` in `servicefoundry.yaml`
+   
    ```commandline
-   servicefoundry deploy --file retrain_deploy.yaml --workspace_fqn <YOUR_WORKSPACE_FQN> --model_version_fqn <YOUR_MODEL_VERSION_FQN>
+   sfy deploy -f servicefoundry.yaml --workspace-fqn <YOUR_WORKSPACE_FQN>
    ```
 7. Click on the <b>"Trigger Job"</b> on the dashboard to run model retraining job
 
@@ -200,23 +218,30 @@ Note: <i>It is necessary to deploy live inference model before being able to dep
     ```commandline
     cd demo
     ```
-2. Create [workspace](https://docs.truefoundry.com/documentation/deploy/concepts/workspace) and [API key](https://docs.truefoundry.com/documentation/deploy/concepts/secrets) on the TrueFoundry platform 
-3. Replace the ``MLF_API_KEY`` value in the infer_realtime_deploy.py file with the API Key found in [secrets tab](https://app.develop.truefoundry.tech/secrets) of your TrueFoundry account <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/secrets#how-to-store-secrets-in-truefoundry)</i>
-4. Copy the workspace_fqn of the workspace that you want to use from the [workspace tab](https://app.develop.truefoundry.tech/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
-5. Copy the inference_server_url from:
-   * Go to deployment [tab of TrueFoundry](https://app.develop.truefoundry.tech/applications)
-   * Open the service that was deployment as live inference model <i>("red-wine-prediction" by default)</i>
-   * Copy the Endpoint link
-6. To deploy using python script:
+
+2. Copy the workspace fqn of the workspace that you want to use from the [Workspaces Tab](https://app.truefoundry.com/workspaces) of TrueFoundry <i>[(Instructions here)](https://docs.truefoundry.com/documentation/deploy/concepts/workspace#copy-workspace-fqn-fully-qualified-name)</i>
+
+3. Copy the inference_server_url from:
+
+    * Go to  [Deployments Tab of TrueFoundry](https://app.truefoundry.com/deployments)
+    * Open the service that was deployment as live inference model <i>("red-wine-infer" by default)</i>
+    * Copy the Endpoint link and paste it as the value against `INFERENCE_SERVER_URL` in `deploy.py`
+
+4. To deploy using python script:
    ```commandline
-   python demo_deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --inference_server_url <YOUR_INFERENCE_SERVER_URL>
+   python deploy.py --workspace_fqn <YOUR_WORKSPACE_FQN> --inference_server_url <YOUR_INFERENCE_SERVER_URL>
    ```
    To deploy using CLI:
+
+   > Replace values for `INFERENCE_SERVER_URL` in `servicefoundry.yaml`
+
    ```commandline
-   servicefoundry deploy --file demo_deploy.yaml --workspace_fqn <YOUR_WORKSPACE_FQN> --inference_server_url <YOUR_INFERENCE_SERVER_URL>
+   sfy deploy -f servicefoundry.yaml --workspace-fqn <YOUR_WORKSPACE_FQN>
    ```
-6. Click on the dashboard link in the terminal
-7. Click on the <b>"Endpoint"</b> link on the dashboard to open the streamlit demo
+
+5. Click on the dashboard link in the terminal
+
+6. Click on the <b>"Endpoint"</b> link on the dashboard to open the streamlit demo
 
 
 </details>
