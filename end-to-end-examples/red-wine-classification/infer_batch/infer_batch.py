@@ -14,7 +14,7 @@ DATASET_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-qu
 
 
 # generate random input samples from the original dataset
-def get_input_data(num_samples=20):
+def get_input_data(num_samples=random.randint(15, 30)):
     df = pd.read_csv(DATASET_URL, sep=";")
     df = df.sample(n=num_samples)
     y = df.pop("quality").to_list()
@@ -26,11 +26,13 @@ def get_input_data(num_samples=20):
 
 features_list, actuals_list = get_input_data()
 
+print("Running predictions...")
 # finding predictions from the inference server
 predictions_list = requests.post(
     url=urljoin(request_url, "/predict"), json=features_list
 ).json()
 
+print("Logging predictions...")
 # logging actual values (null value for 12% cases, random value for 25% cases, correct value for rest)
 time.sleep(10)
 for prediction, actual in zip(predictions_list, actuals_list):
@@ -44,3 +46,5 @@ for prediction, actual in zip(predictions_list, actuals_list):
         model_version_fqn=prediction["model_version_fqn"],
         actuals=[mlf.Actual(data_id=prediction["data_id"], value=actual_value)],
     )
+
+print("Done!")

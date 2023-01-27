@@ -14,8 +14,7 @@ client = mlf.get_client()
 model_version = client.get_model(MODEL_VERSION_FQN)
 model = model_version.load()
 
-app = FastAPI(docs_url="/")
-
+app = FastAPI(root_path=os.getenv("TFY_SERVICE_ROOT_PATH"), docs_url="/")
 
 # creating the inference request object
 class WinePredictionRequest(BaseModel):

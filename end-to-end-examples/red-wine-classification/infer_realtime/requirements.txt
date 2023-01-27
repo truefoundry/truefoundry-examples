@@ -1,5 +1,5 @@
 fastapi==0.82.0
 uvicorn==0.18.3
 pydantic==1.10.2
-mlfoundry>=0.4.3,<0.5
+mlfoundry>=0.5.6,<0.6.0
 pandas==1.4.4

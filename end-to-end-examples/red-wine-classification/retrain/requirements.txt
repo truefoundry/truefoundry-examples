@@ -2,9 +2,4 @@ pandas==1.4.4
 numpy==1.22.4
 imbalanced-learn==0.9.1
 scikit-learn==1.1.2
-
-# experiment tracking
-mlfoundry>=0.4.3,<0.5
-
-# deployments
-servicefoundry>=0.1.97,<0.2.0
+mlfoundry>=0.5.6,<0.6.0

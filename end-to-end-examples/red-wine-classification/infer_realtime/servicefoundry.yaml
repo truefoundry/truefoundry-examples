@@ -1,0 +1,17 @@
+name: red-wine-infer
+type: service
+image:
+  type: build
+  build_source:
+    type: local
+  build_spec:
+    type: tfy-python-buildpack
+    command: uvicorn infer_realtime:app --port 8000 --host 0.0.0.0
+env:
+  TFY_API_KEY: tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY
+  MLF_MODEL_VERSION_FQN: <paste you model version fqn here>
+ports:
+  - port: 8000
+resources:
+  memory_limit: 1500
+  memory_request: 1000
