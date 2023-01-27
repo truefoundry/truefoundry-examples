@@ -1,11 +1,9 @@
-# %%
-from operator import concat
-import streamlit as st
-import requests
 import os
+from urllib.parse import urljoin
 
+import requests
+import streamlit as st
 
-# %%
 def fetch(session, url):
     try:
         result = session.get(url)
@@ -13,13 +11,10 @@ def fetch(session, url):
     except Exception:
         return {}
 
-# %%
 
 mini = [4.600000,0.120000,0.000000,0.900000,0.012000,1.000000,6.000000,0.990070,2.740000,0.330000,8.400000]
 maxi = [15.900000,1.580000,1.000000,15.500000,0.611000,72.000000,289.000000,1.003690,4.010000,2.000000,14.900000]
-# %%
-from pyexpat import features
-from wsgiref.util import request_uri
+
 
 
 def main():
@@ -27,8 +22,7 @@ def main():
     st.set_page_config(page_title="Trial", page_icon="🤖")
     st.title("Wine Quality Prediction")
     session = requests.Session()
-    with st.form("my_form"):
-        
+    with st.form("my_form"):        
         fixed_acidity = st.slider("Fixed Acidity",min_value=0.0,max_value=16.0,step=0.1,key="fixed_acidity")
         volatile_acidity = st.slider("Volatile Acidity",min_value=0.0,max_value=1.6,step=0.01,key="volatile_acidity")
         citric_acid = st.slider("Citric Acid",min_value=mini[2],max_value=maxi[2],step=0.01)
@@ -56,15 +50,16 @@ def main():
                 "sulphates": sulphates,
                 "alcohol": alcohol
             }
-            ]
+        ]
         
         
         submitted = st.form_submit_button("Submit")
 
         if submitted:
-            data = requests.post(url=concat(request_url, "/predict"), json=features).json()
+            data = requests.post(url=urljoin(request_url, "/predict"), json=features).json()
+            print("Got Response:", data)
             if data:
-                st.metric(label="Wine Quality",value=data[0]["value"])
+                st.metric(label="Wine Quality", value=data[0]["value"])
             else:
                 st.error("Error")
 
@@ -72,7 +67,6 @@ def main():
 if __name__ == '__main__':
     main()
 
-# %%
 
 
 

@@ -8,8 +8,8 @@ image:
     type: tfy-python-buildpack
     command: python infer_batch.py
 env:
+  INFERENCE_SERVER_URL: "<Paste your realtime infer service API Endpoint>"
   TFY_API_KEY: tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY
-  INFERENCE_SERVER_URL: <paste inference server url here>
 trigger:
   type: scheduled
   schedule: "*/10 * * * *"

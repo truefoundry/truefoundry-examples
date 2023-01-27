@@ -35,7 +35,7 @@ service = Service(
     env={
         # These will automatically map the secret value to the environment variable.
         "INFERENCE_SERVER_URL": args.inference_server_url,
-        "MLF_API_KEY": "tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY",
+        "TFY_API_KEY": "tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY",
     },
     ports=[{"port": 8501}], #In public cloud deployment TrueFoundry exposes port 8501
     resources=Resources(
