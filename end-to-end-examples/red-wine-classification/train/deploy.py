@@ -16,8 +16,7 @@ python_build = PythonBuild(
     command="python train.py",
 )
 env = {
-    # These will automatically map the secret value to the environment variable.
-    "TFY_API_KEY": "tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY",
+    "TFY_API_KEY": "<Paste your API KEY>",
 }
 job = Job(
     name="red-wine-train",

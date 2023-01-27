@@ -8,7 +8,8 @@ from sklearn.metrics import accuracy_score, f1_score
 
 s = time.time()
 # it is used for getting inference data for Retraining the model
-MODEL_FQN = os.getenv("MLF_MODEL_FQN")
+MODEL_FQN, _ = os.getenv("MLF_MODEL_VERSION_FQN").rsplit(":", 1)
+
 
 # You can bring data from your own sources
 X_train, X_test, y_train, y_test = get_initial_data(test_size=0.1, random_state=42)

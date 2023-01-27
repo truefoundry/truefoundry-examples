@@ -11,7 +11,6 @@ image:
     type: local
 env:
   INFERENCE_SERVER_URL: "<Paste your realtime infer service API Endpoint>"
-  TFY_API_KEY: "tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY"
 ports:
   - port: 8501
     expose: true

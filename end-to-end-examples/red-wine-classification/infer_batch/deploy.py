@@ -24,7 +24,7 @@ job = Job(
     ),
     env={
         "INFERENCE_SERVER_URL": args.inference_server_url,
-        "TFY_API_KEY": "tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY",
+        "TFY_API_KEY": "<Paste your API KEY>"
     },
     trigger=Schedule(schedule="*/10 * * * *"),
 )
