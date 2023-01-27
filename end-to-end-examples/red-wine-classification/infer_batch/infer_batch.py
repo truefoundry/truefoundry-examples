@@ -14,7 +14,7 @@ DATASET_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-qu
 
 
 # generate random input samples from the original dataset
-def get_input_data(num_samples=20):
+def get_input_data(num_samples=random.randint(15, 30)):
     df = pd.read_csv(DATASET_URL, sep=";")
     df = df.sample(n=num_samples)
     y = df.pop("quality").to_list()

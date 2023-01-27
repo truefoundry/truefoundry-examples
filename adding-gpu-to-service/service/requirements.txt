@@ -1,4 +1,0 @@
-servicefoundry>=0.1.34,<0.2.0
-fastapi>=0.78.0,<1.0.0
-prometheus_client>=0.14.1,<1.0.0
-uvicorn>=0.17.0,<1.0.0

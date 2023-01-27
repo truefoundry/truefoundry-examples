@@ -1,19 +1,16 @@
 name: iris-train-cron-job
-components:
-- name: iris-train-cron-job
-  type: job
-  image:
-    type: build
-    build_source:
-      type: local
-    build_spec:
-      type: tfy-python-buildpack
-      command: python retrain.py
-  env:
-    MLF_HOST: https://app.develop.truefoundry.tech
-    MLF_API_KEY: tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY
-    MLF_MODEL_FQN: <paste model fqn here>
-  trigger:
-    type: scheduled
-    schedule: "0 0 * * 0"
-    concurrency_policy: "Forbid"
+type: job
+image:
+  type: build
+  build_source:
+    type: local
+  build_spec:
+    type: tfy-python-buildpack
+    command: python retrain.py
+env:
+  TFY_API_KEY: tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY
+  MLF_MODEL_FQN: <paste model fqn here>
+trigger:
+  type: scheduled
+  schedule: "0 0 * * 0"
+  concurrency_policy: "Forbid"

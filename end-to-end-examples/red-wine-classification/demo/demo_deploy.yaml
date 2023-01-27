@@ -1,27 +1,24 @@
 name: red-wine-demo
-components:
-  - env:
-      MLF_HOST: https://app.develop.truefoundry.tech
-      INFERENCE_SERVER_URL: <paste your inference server url here>
-      MLF_API_KEY: tfy-secret://user-truefoundry:red-wine-quality-sg:MLF_API_KEY
-    name: red-wine-demo
-    type: service
-    image:
-      type: build
-      build_spec:
-        type: tfy-python-buildpack
-        command: streamlit run demo.py
-        python_version: '3.9'
-        build_context_path: ./
-      build_source:
-        type: local
-    ports:
-      - port: 8501
-        expose: true
-        protocol: TCP
-    replicas: 1
-    resources:
-      cpu_limit: '0.5'
-      cpu_request: '0.5'
-      memory_limit: '2500'
-      memory_request: '1500'
+type: service
+image:
+  type: build
+  build_spec:
+    type: tfy-python-buildpack
+    command: streamlit run demo.py
+    python_version: '3.9'
+    build_context_path: ./
+  build_source:
+    type: local
+env:
+  INFERENCE_SERVER_URL: <paste your inference server url here>
+  TFY_API_KEY: tfy-secret://user-truefoundry:red-wine-sg:TFY_API_KEY
+ports:
+  - port: 8501
+    expose: true
+    protocol: TCP
+replicas: 1
+resources:
+  cpu_limit: 0.5
+  cpu_request: 0.5
+  memory_limit: 2500
+  memory_request: 1500
