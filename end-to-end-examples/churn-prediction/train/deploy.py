@@ -17,8 +17,7 @@ job = Job(
     image=Build(build_spec=PythonBuild(command="python main.py --n_neighbors {{n_neighbors}} --weights {{weights}} --algorithm {{algorithm}} --power {{power}}")),
     env={
         # These will automatically map the secret value to the environment variable.
-        "TFY_HOST": "https://app.devtest.truefoundry.tech",
-        "TFY_API_KEY": os.getenv('TFY_API_KEY1')
+        "TFY_API_KEY": os.getenv('TFY_API_KEY')
     },
     params=[
         Param(name="n_neighbors", default='5', description="Number of neighbors to use by default"),
