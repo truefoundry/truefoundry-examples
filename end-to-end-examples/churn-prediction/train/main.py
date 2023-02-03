@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 def experiment_track(model, params, metrics, X_train, X_test):
     mlf_api = mlf.get_client()
     mlf_run = mlf_api.create_run(
-        project_name="churn-prediction-3", run_name="churn-train-job"
+        project_name="churn-prediction", run_name="churn-train-job"
     )
     mlf_run.log_params(params)
     mlf_run.log_metrics(metrics)
