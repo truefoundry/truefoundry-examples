@@ -1,0 +1,13 @@
+grpc: false
+name: churn-prediction
+type: model-deployment
+resources:
+  cpu_limit: 0.5
+  cpu_request: 0.2
+  memory_limit: 500
+  memory_request: 200
+  ephemeral_storage_limit: 2000
+  ephemeral_storage_request: 1000
+model_source:
+  type: tfy-model-registry
+  model_version_fqn: model:truefoundry/user-truefoundry/churn-prediction-3/churn-model:2

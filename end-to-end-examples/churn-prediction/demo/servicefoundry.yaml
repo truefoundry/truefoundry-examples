@@ -1,0 +1,26 @@
+env:
+  MODEL_DEPLOYED_URL: >-
+    https://truefoundry.tfy-ctl-euwe1-devtest.devtest.truefoundry.tech/np-churn-model-np18-ws/
+name: churn-prediction-demo
+type: service
+image:
+  type: build
+  build_spec:
+    type: tfy-python-buildpack
+    command: python demo.py
+    python_version: '3.9'
+    build_context_path: ./
+  build_source:
+    type: local
+ports:
+  - port: 8080
+    expose: true
+    protocol: TCP
+replicas: 1
+resources:
+  cpu_limit: 0.5
+  cpu_request: 0.5
+  memory_limit: 2500
+  memory_request: 1500
+  ephemeral_storage_limit: 2000
+  ephemeral_storage_request: 100
