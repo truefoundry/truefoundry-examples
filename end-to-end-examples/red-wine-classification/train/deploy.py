@@ -1,3 +1,4 @@
+import os
 import argparse
 import logging
 
@@ -16,7 +17,8 @@ python_build = PythonBuild(
     command="python train.py",
 )
 env = {
-    "TFY_API_KEY": "<Paste your API KEY>",
+    "TFY_HOST": os.getenv('TFY_HOST', default='https://app.truefoundry.com'),
+    "TFY_API_KEY": os.getenv('TFY_API_KEY'),
 }
 job = Job(
     name="red-wine-train",

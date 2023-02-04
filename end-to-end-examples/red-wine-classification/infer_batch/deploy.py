@@ -1,3 +1,4 @@
+import os
 import argparse
 import logging
 
@@ -24,7 +25,8 @@ job = Job(
     ),
     env={
         "INFERENCE_SERVER_URL": args.inference_server_url,
-        "TFY_API_KEY": "<Paste your API KEY>"
+        "TFY_HOST": os.getenv('TFY_HOST', default='https://app.truefoundry.com'),
+        "TFY_API_KEY": os.getenv('TFY_API_KEY')
     },
     trigger=Schedule(schedule="*/10 * * * *"),
 )

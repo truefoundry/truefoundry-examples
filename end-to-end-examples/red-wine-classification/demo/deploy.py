@@ -1,3 +1,4 @@
+import os
 import argparse
 import logging
 
@@ -33,6 +34,8 @@ service = Service(
         ),
     ),
     env={
+        "TFY_HOST": os.getenv('TFY_HOST', default='https://app.truefoundry.com'),
+        "TFY_API_KEY": os.getenv('TFY_API_KEY'),
         "INFERENCE_SERVER_URL": args.inference_server_url,
     },
     ports=[{"port": 8501}], #In public cloud deployment TrueFoundry exposes port 8501
