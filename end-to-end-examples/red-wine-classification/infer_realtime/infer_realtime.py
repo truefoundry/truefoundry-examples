@@ -74,11 +74,11 @@ def predict(inference_requests: List[WinePredictionRequest]):
             )
         )
     e = time.time()
-    try:
+    """try:
         client.log_predictions(
             model_version_fqn=MODEL_VERSION_FQN, predictions=prediction_logs
         )
     except Exception as err:
-        print(err)
+        print(err)"""
     print(f"Made {len(prediction_logs)} predictions in {e-s} seconds")
     return predictions
