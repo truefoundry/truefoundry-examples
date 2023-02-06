@@ -1,0 +1,26 @@
+env:
+  TFY_API_KEY: # paste API_KEY here
+  MODEL_VERSION_FQN: model:truefoundry/truefoundry-demo/diabetes-regression/diabetes-regression:2
+name: diabetes-reg
+type: service
+image:
+  type: build
+  build_spec:
+    type: tfy-python-buildpack
+    command: uvicorn main:app --port 8000 --host 0.0.0.0
+    python_version: '3.9'
+    build_context_path: ./
+  build_source:
+    type: local
+ports:
+  - port: 8000
+    expose: true
+    protocol: TCP
+replicas: 1
+resources:
+  cpu_limit: 0.5
+  cpu_request: 0.2
+  memory_limit: 500
+  memory_request: 200
+  ephemeral_storage_limit: 2000
+  ephemeral_storage_request: 1000
