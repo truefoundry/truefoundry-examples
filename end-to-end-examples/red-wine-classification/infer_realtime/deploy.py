@@ -23,7 +23,7 @@ args = parser.parse_args()
 
 # creating a service object and defining all the configurations
 service = Service(
-    name="red-wine-infer",
+    name="red-wine-fastapi",
     image=Build(
         build_spec=PythonBuild(
             command="uvicorn infer_realtime:app --port 4000 --host 0.0.0.0",

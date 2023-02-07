@@ -152,7 +152,7 @@ Note: <i>It is necessary to deploy live inference model before being able to dep
 
 5. Copy the inference_server_url from:
    * Go to  [Deployments Tab of TrueFoundry](https://app.truefoundry.com/deployments)
-   * Open the service that was deployment as live inference model <i>("red-wine-infer" by default)</i>
+   * Open the service that was deployment as live inference model <i>("red-wine-fastapi" by default)</i>
    * Copy the Endpoint link and paste it as the value against `INFERENCE_SERVER_URL` in `deploy.py`
 6. To deploy using python script:
    ```commandline
@@ -224,7 +224,7 @@ Note: <i>It is necessary to deploy live inference model before being able to dep
 3. Copy the inference_server_url from:
 
     * Go to  [Deployments Tab of TrueFoundry](https://app.truefoundry.com/deployments)
-    * Open the service that was deployment as live inference model <i>("red-wine-infer" by default)</i>
+    * Open the service that was deployment as live inference model <i>("red-wine-fastapi" by default)</i>
     * Copy the Endpoint link and paste it as the value against `INFERENCE_SERVER_URL` in `deploy.py`
 
 4. To deploy using python script:
