@@ -38,4 +38,4 @@ JOB_DEPLOYMENT_FQN = output_train.fqn
 # Run/Trigger the deployed job
 trigger_job(deployment_fqn=JOB_DEPLOYMENT_FQN, command=job_run_command)
 
-print(f"createdBy:%{output.createdBy}%")
+print(f"createdBy:%{output_train.createdBy}%")
