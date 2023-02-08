@@ -9,7 +9,7 @@ parser.add_argument(
     "--workspace_fqn", type=str, required=True, help="fqn of the workspace to deploy to"
 )
 parser.add_argument(
-    "--model_fqn",
+    "--model_version_fqn",
     type=str,
     required=True,
     help="fqn of the model which you want to retrain",
@@ -22,8 +22,8 @@ python_build = PythonBuild(
     command="python retrain.py",
 )
 env = {
-    "TFY_API_KEY": "<Paste your API KEY>",
-    "MLF_MODEL_VERSION_FQN": "<Paste model version fqn here>"
+    "TFY_API_KEY": os.getenv('TFY_API_KEY'),
+    "MLF_MODEL_VERSION_FQN": args.model_version_fqn
 }
 job = Job(
     name="red-wine-retrain",

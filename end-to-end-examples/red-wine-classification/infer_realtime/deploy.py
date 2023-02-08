@@ -1,3 +1,4 @@
+import os
 import argparse
 import logging
 
@@ -31,7 +32,7 @@ service = Service(
         ),
     ),
     env={
-        "TFY_API_KEY": "<Paste your API KEY>",
+        "TFY_API_KEY": os.getenv('TFY_API_KEY'),
         "MLF_MODEL_VERSION_FQN": args.model_version_fqn,
     },
     ports=[{"port": 4000}],
