@@ -3,6 +3,7 @@ import argparse
 import logging
 
 from servicefoundry import Build, Job, PythonBuild, Resources
+from servicefoundry.internal.experimental import trigger_job
 
 logging.basicConfig(level=logging.INFO)
 parser = argparse.ArgumentParser()
@@ -12,9 +13,11 @@ parser.add_argument(
 args = parser.parse_args()
 
 # servicefoundry uses this specification to automatically create a Dockerfile and build an image,
+job_run_command = "python train.py"
+
 python_build = PythonBuild(
     python_version="3.9",
-    command="python train.py",
+    command=job_run_command,
 )
 env = {
     "TFY_API_KEY": os.getenv('TFY_API_KEY'),
@@ -27,4 +30,12 @@ job = Job(
         cpu_request=1, cpu_limit=1.5, memory_request=1000, memory_limit=1500
     ),
 )
-job.deploy(workspace_fqn=args.workspace_fqn)
+output_train = job.deploy(workspace_fqn=args.workspace_fqn)
+
+# Job Deployment FQN can be found at Dashboard --> Deployments --> red-wine-train job --> FQN
+JOB_DEPLOYMENT_FQN = output_train.fqn
+
+# Run/Trigger the deployed job
+trigger_job(deployment_fqn=JOB_DEPLOYMENT_FQN, command=job_run_command)
+
+print(f"createdBy:%{output.createdBy}%")
