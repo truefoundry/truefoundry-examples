@@ -30,12 +30,7 @@ job = Job(
         cpu_request=1, cpu_limit=1.5, memory_request=1000, memory_limit=1500
     ),
 )
-output_train = job.deploy(workspace_fqn=args.workspace_fqn)
-
-# Job Deployment FQN can be found at Dashboard --> Deployments --> red-wine-train job --> FQN
-JOB_DEPLOYMENT_FQN = output_train.fqn
+deployed_job = job.deploy(workspace_fqn=args.workspace_fqn)
 
 # Run/Trigger the deployed job
-trigger_job(deployment_fqn=JOB_DEPLOYMENT_FQN, command=job_run_command)
-
-print(f"createdBy:%{output_train.createdBy}%")
+trigger_job(deployment_fqn=deployed_job.fqn, command=job_run_command)
