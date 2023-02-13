@@ -8,6 +8,7 @@ def main(limit: int):
         print(f"Running Job: {i + 1}")
         time.sleep(1)
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", default=10, type=int)
