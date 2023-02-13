@@ -18,10 +18,11 @@ maxi = [15.900000,1.580000,1.000000,15.500000,0.611000,72.000000,289.000000,1.00
 
 
 def main():
+    # don't forget the trailing slash
     request_url = os.getenv("INFERENCE_SERVER_URL")
+
     st.set_page_config(page_title="Trial", page_icon="🤖")
     st.title("Wine Quality Prediction")
-    session = requests.Session()
     with st.form("my_form"):        
         fixed_acidity = st.slider("Fixed Acidity",min_value=0.0,max_value=16.0,step=0.1,key="fixed_acidity")
         volatile_acidity = st.slider("Volatile Acidity",min_value=0.0,max_value=1.6,step=0.01,key="volatile_acidity")
@@ -51,12 +52,14 @@ def main():
                 "alcohol": alcohol
             }
         ]
-        
-        
+
+
         submitted = st.form_submit_button("Submit")
 
         if submitted:
-            data = requests.post(url=urljoin(request_url, "/predict"), json=features).json()
+            r = requests.post(url=urljoin(request_url, "./predict"), json=features)
+            print("Status Code:", r.status_code)
+            data = r.json()
             print("Got Response:", data)
             if data:
                 st.metric(label="Wine Quality", value=data[0]["value"])

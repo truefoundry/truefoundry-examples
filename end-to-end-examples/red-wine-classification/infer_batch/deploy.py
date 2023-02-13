@@ -24,7 +24,7 @@ job = Job(
     ),
     env={
         "INFERENCE_SERVER_URL": args.inference_server_url,
-        "TFY_API_KEY": os.environ['TFY_API_KEY']
+        "TFY_API_KEY": os.getenv('TFY_API_KEY')
     },
     trigger=Schedule(schedule="*/10 * * * *"),
 )

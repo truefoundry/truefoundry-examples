@@ -1,4 +1,4 @@
-name: red-wine-infer
+name: red-wine-fastapi
 type: service
 image:
   type: build

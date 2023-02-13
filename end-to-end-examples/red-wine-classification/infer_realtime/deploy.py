@@ -24,7 +24,7 @@ args = parser.parse_args()
 
 # creating a service object and defining all the configurations
 service = Service(
-    name="red-wine-prediction",
+    name="red-wine-fastapi",
     image=Build(
         build_spec=PythonBuild(
             command="uvicorn infer_realtime:app --port 4000 --host 0.0.0.0",
@@ -32,7 +32,7 @@ service = Service(
         ),
     ),
     env={
-        "TFY_API_KEY": os.environ['TFY_API_KEY'],
+        "TFY_API_KEY": os.getenv('TFY_API_KEY'),
         "MLF_MODEL_VERSION_FQN": args.model_version_fqn,
     },
     ports=[{"port": 4000}],
