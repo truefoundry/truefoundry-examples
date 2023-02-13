@@ -22,17 +22,13 @@ service = Service(
     image=Build(
         build_spec=PythonBuild(
              python_version="3.10",
-             # CUDA is not required for this example because pytorch ships it own libcuda
+             # CUDA is not required for this example because pytorch ships its own libcuda.so
+             # but it can be added like following:
              # cuda_version=CUDAVersion.CUDA_11_3_CUDNN8,
              requirements_path="requirements.txt",
              command="bash start.sh"
         ),
     ),
-    env={
-        # Providing this can be skipped once GPU feature stabilizes on the platform
-        "NVIDIA_VISIBLE_DEVICES": "all",
-        "NVIDIA_DRIVER_CAPABILITIES": "compute,utility",
-    },
     ports=[Port(port=8080)],
     resources=Resources(
         cpu_request=3.5,
