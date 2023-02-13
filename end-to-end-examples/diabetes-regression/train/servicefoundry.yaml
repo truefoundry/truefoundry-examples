@@ -1,0 +1,34 @@
+env:
+  TFY_API_KEY: # Paste api key here
+name: diabetes-reg-train
+type: job
+image:
+  type: build
+  build_spec:
+    type: tfy-python-buildpack
+    command: python train.py --kernel {{kernel}} --n_quantiles {{n_quantiles}}
+    python_version: '3.9'
+    requirements_path: requirements.txt
+    build_context_path: ./
+  build_source:
+    type: local
+params:
+  - name: n_quantiles
+    default: '100'
+  - name: kernel
+    default: linear
+    description: kernel for svm
+restart: Never
+retries: 1
+timeout: 1000
+trigger:
+  type: manual
+resources:
+  cpu_limit: 0.5
+  cpu_request: 0.2
+  memory_limit: 500
+  memory_request: 200
+  ephemeral_storage_limit: 2000
+  ephemeral_storage_request: 1000
+failed_jobs_history_limit: 20
+successful_jobs_history_limit: 20

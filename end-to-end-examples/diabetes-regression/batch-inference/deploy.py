@@ -7,24 +7,18 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--workspace_fqn", type=str, required=True, help="fqn of workspace to deploy"
 )
-parser.add_argument(
-    "--inference_server_url",
-    type=str,
-    required=True,
-    help="url of the inference server",
-)
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO)
 
 job = Job(
-    name="red-wine-batch",
+    name="diabetes-reg-batch",
     image=Build(
-        build_spec=PythonBuild(command="python infer_batch.py"),
+        build_spec=PythonBuild(command="python main.py"),
     ),
     env={
-        "INFERENCE_SERVER_URL": args.inference_server_url,
-        "TFY_API_KEY": os.getenv('TFY_API_KEY')
+        "MODEL_VERSION_FQN": os.environ['MODEL_VERSION_FQN'],
+        "TFY_API_KEY": os.environ['TFY_API_KEY']
     },
     trigger=Schedule(schedule="*/10 * * * *"),
 )

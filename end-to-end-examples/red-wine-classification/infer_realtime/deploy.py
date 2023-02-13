@@ -1,6 +1,6 @@
-import os
 import argparse
 import logging
+import os
 
 from servicefoundry import Build, PythonBuild, Resources, Service
 

@@ -1,8 +1,7 @@
 name: churn-prediction-train
 type: job
 env:
-  TFY_HOST: https://app.devtest.truefoundry.tech
-  TFY_API_KEY: djE6dHJ1ZWZvdW5kcnk6dXNlci10cnVlZm91bmRyeToxY2NlYTg=
+  TFY_API_KEY: # enter your api key here
 image:
   type: build
   build_spec:

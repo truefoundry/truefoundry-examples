@@ -2,7 +2,7 @@ import os
 import argparse
 import logging
 
-from servicefoundry import Build, PythonBuild, Resources, Service
+from servicefoundry import Build, PythonBuild, Resources, Service, Autoscaling, CPUUtilizationMetric
 
 logging.basicConfig(level=logging.INFO)
 
@@ -37,9 +37,10 @@ service = Service(
         "TFY_API_KEY": os.getenv('TFY_API_KEY'),
         "INFERENCE_SERVER_URL": args.inference_server_url,
     },
-    ports=[{"port": 8501}],  # In public cloud deployment TrueFoundry exposes port 8501
+    ports=[{"port": 8501, "host": "my-host-1234.tfy-ctl-euwe1-production.production.truefoundry.com"}], #In public cloud deployment TrueFoundry exposes port 8501
     resources=Resources(
         cpu_request=0.5, cpu_limit=0.5, memory_limit=2500, memory_request=1500
     ),
+    replicas = Autoscaling(min_replicas=1, max_replicas=2, metrics=CPUUtilizationMetric(value=26))
 )
 service.deploy(workspace_fqn=args.workspace_fqn)
