@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 
 from servicefoundry import Build, PythonBuild, Resources, Service
 
@@ -13,14 +14,6 @@ parser.add_argument(
     required=True,
     help="fqn of workspace where you want to deploy",
 )
-
-parser.add_argument(
-    "--model_deployed_url",
-    type=str,
-    required=True,
-    help="end point of the trained model that would be used for inference",
-)
-
 args = parser.parse_args()
 
 # creating a service object and defining all the configurations
@@ -33,7 +26,7 @@ service = Service(
         ),
     ),
     env={
-        "MODEL_DEPLOYED_URL": args.model_deployed_url,
+        "MODEL_DEPLOYED_URL": os.environ['MODEL_DEPLOYED_URLpi'],
     },
     ports=[{"port": 8080}], #In public cloud deployment TrueFoundry exposes port 8501
     resources=Resources(

@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 
 from servicefoundry import Build, Job, PythonBuild, Resources
 
@@ -16,7 +17,7 @@ python_build = PythonBuild(
     command="python train.py",
 )
 env = {
-    "TFY_API_KEY": "<Paste your API KEY>",
+    "TFY_API_KEY": os.environ["TFY_API_KEY"],
 }
 job = Job(
     name="red-wine-train",

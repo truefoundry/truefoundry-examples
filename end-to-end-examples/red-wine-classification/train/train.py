@@ -1,4 +1,3 @@
-import os
 import time
 import mlfoundry
 from datetime import datetime

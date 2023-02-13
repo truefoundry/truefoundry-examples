@@ -1,0 +1,30 @@
+env:
+  TFY_API_KEY: # Paste API key here
+  MODEL_VERSION_FQN: model:truefoundry/truefoundry-demo/diabetes-regression/diabetes-regression:2
+name: diabetes-reg-batch
+type: job
+image:
+  type: build
+  build_spec:
+    type: tfy-python-buildpack
+    command: python main.py
+    python_version: '3.9'
+    build_context_path: ./
+  build_source:
+    type: local
+restart: Never
+retries: 1
+timeout: 1000
+trigger:
+  type: scheduled
+  schedule: '*/10 * * * *'
+  concurrency_policy: Forbid
+resources:
+  cpu_limit: 0.5
+  cpu_request: 0.2
+  memory_limit: 500
+  memory_request: 200
+  ephemeral_storage_limit: 2000
+  ephemeral_storage_request: 1000
+failed_jobs_history_limit: 20
+successful_jobs_history_limit: 20
