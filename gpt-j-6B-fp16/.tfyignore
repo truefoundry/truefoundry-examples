@@ -1,0 +1,3 @@
+.trash
+*.py[cod]
+deploy.py
