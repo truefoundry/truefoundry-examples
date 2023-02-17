@@ -23,6 +23,7 @@ job = Job(
         build_spec=PythonBuild(command="python infer_batch.py"),
     ),
     env={
+        "TFY_HOST": os.getenv('TFY_HOST', default='https://app.truefoundry.com'),
         "INFERENCE_SERVER_URL": args.inference_server_url,
         "TFY_API_KEY": os.getenv('TFY_API_KEY')
     },
