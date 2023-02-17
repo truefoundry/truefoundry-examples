@@ -237,7 +237,7 @@ def deploy_to_truefoundry(
             "TFY_API_KEY": tfy_api_key,
             "MODEL_VERSION_FQN": model_version_fqn,
         },
-        ports=[{"port": 8000}],
+        ports=[{"port": 8080}],
         resources=Resources(
             cpu_request=0.5,
             cpu_limit=1.5,
