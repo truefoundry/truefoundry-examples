@@ -1,0 +1,11 @@
+--extra-index-url https://download.pytorch.org/whl/cu113
+ftfy==6.1.1
+scipy==1.10.0
+torch==1.12.1+cu113
+torchvision==0.13.1+cu113
+triton==2.0.0a2
+diffusers==0.13.1
+accelerate==0.16.0
+transformers==4.26.1
+gradio==3.16.0
+https://github.com/camenduru/stable-diffusion-webui-colab/releases/download/0.0.16/xformers-0.0.16+bc08bbc.d20230123-cp38-cp38-linux_x86_64.whl
