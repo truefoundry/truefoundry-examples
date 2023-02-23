@@ -36,8 +36,6 @@ service = Service(
             app_protocol=AppProtocol.grpc,
             # Note: Your cluster should allow subdomain based routing (*.yoursite.com) for gRPC to work correctly via public internet.
             # A host matching the wildcard base domain for the cluster can be explicitly configured by passing in `host`
-            # E.g. if the cluster's base domain urls contain `*.tfy-ctl-euwe1-production.truefoundry.com`, then we can pass something like
-            # host="mobilenet-tiny-tf-tfy-demo.tfy-ctl-euwe1-production.truefoundry.com"
         ),
     ],
     replicas=args.replicas,
