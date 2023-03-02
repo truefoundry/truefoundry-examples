@@ -29,7 +29,7 @@ features_list, actuals_list = get_input_data()
 print("Running predictions...")
 # finding predictions from the inference server
 predictions_list = requests.post(
-    url=urljoin(request_url, "./predict"), json=features_list
+    url=urljoin(request_url, "predict"), json=features_list
 ).json()
 
 print("Logging predictions...")
