@@ -34,13 +34,14 @@ service = Service(
         ),
     ),
     env={
+        "TFY_HOST": os.getenv('TFY_HOST', default='https://app.truefoundry.com'),
         "TFY_API_KEY": os.getenv('TFY_API_KEY'),
         "INFERENCE_SERVER_URL": args.inference_server_url,
     },
-    ports=[{"port": 8501], #In public cloud deployment TrueFoundry exposes port 8501
+    ports=[{"port": 8501}], #In public cloud deployment TrueFoundry exposes port 8501
     resources=Resources(
         cpu_request=0.5, cpu_limit=0.5, memory_limit=2500, memory_request=1500
     ),
-    replicas = 1
+    replicas=1
 )
 service.deploy(workspace_fqn=args.workspace_fqn)

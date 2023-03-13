@@ -1,0 +1,528 @@
+Metaflow 2.7.22 executing FareRegressionFlow for user:chiragjn
+Validating your flow...
+    The graph looks good!
+Running pylint...
+    Pylint is happy!
+Bootstrapping conda environment...(this could take a few minutes)
+2023-02-17 09:10:16.014 Workflow starting (run-id 1676605216007443):
+2023-02-17 09:10:16.487 [1676605216007443/start/1 (pid 44943)] Task is starting.
+2023-02-17 09:10:17.313 [1676605216007443/start/1 (pid 44943)] Training set includes 10000 data points
+2023-02-17 09:10:18.178 [1676605216007443/start/1 (pid 44943)] Task finished successfully.
+2023-02-17 09:10:18.634 [1676605216007443/model/2 (pid 44951)] Task is starting.
+2023-02-17 09:10:18.978 [1676605216007443/model/2 (pid 44951)] Fitting a model
+2023-02-17 09:10:21.453 [1676605216007443/model/2 (pid 44951)] Task finished successfully.
+2023-02-17 09:10:21.908 [1676605216007443/evaluate/3 (pid 44960)] Task is starting.
+2023-02-17 09:10:22.267 [1676605216007443/evaluate/3 (pid 44960)] Pip Install: mlfoundry 0.6.1
+2023-02-17 09:10:23.150 [1676605216007443/evaluate/3 (pid 44960)] Pip Install Done
+2023-02-17 09:10:24.324 [1676605216007443/evaluate/3 (pid 44960)] Starting eval on the model
+2023-02-17 09:10:25.156 [1676605216007443/evaluate/3 (pid 44960)] Model RMSE: 27.6101085035608
+2023-02-17 09:10:28.416 [1676605216007443/evaluate/3 (pid 44960)] Baseline RMSE: 129.38924695734843
+2023-02-17 09:10:28.417 [1676605216007443/evaluate/3 (pid 44960)] [mlfoundry] 2023-02-17T09:10:28+0530 INFO Logged in to 'https://app.devtest.truefoundry.tech/' as '[redacted]' ([redacted])
+2023-02-17 09:10:28.464 [1676605216007443/evaluate/3 (pid 44960)] Creating run run-2023-02-17-09-10-28
+2023-02-17 09:10:30.664 [1676605216007443/evaluate/3 (pid 44960)] Link to the dashboard for the run: https://app.devtest.truefoundry.tech/mlfoundry/100/run/a77cb6fcb21149d09a24025757b95498/
+2023-02-17 09:10:34.994 [1676605216007443/evaluate/3 (pid 44960)] [mlfoundry] 2023-02-17T09:10:34+0530 INFO Run 'truefoundry/user-truefoundry/cj-metaflow-tf/run-2023-02-17-09-10-28' has started.
+2023-02-17 09:10:35.694 [1676605216007443/evaluate/3 (pid 44960)] [mlfoundry] 2023-02-17T09:10:35+0530 INFO Metrics logged successfully
+2023-02-17 09:10:35.708 [1676605216007443/evaluate/3 (pid 44960)] [mlfoundry] 2023-02-17T09:10:35+0530 INFO Logging model and additional files, this might take a while ...
+2023-02-17 09:10:35.709 [1676605216007443/evaluate/3 (pid 44960)] [mlfoundry] 2023-02-17T09:10:35+0530 INFO Serializing model files to model version contents
+2023-02-17 09:10:37.957 [1676605216007443/evaluate/3 (pid 44960)] [mlfoundry] 2023-02-17T09:10:37+0530 INFO Packaging and uploading files to remote ...
+2023-02-17 09:11:15.983 [1676605216007443/evaluate/3 (pid 44960)] [mlfoundry] 2023-02-17T09:11:15+0530 INFO Logged model successfully with fqn 'model:truefoundry/user-truefoundry/cj-metaflow-tf/rf_model:3'
+2023-02-17 09:11:17.422 [1676605216007443/evaluate/3 (pid 44960)] [mlfoundry] 2023-02-17T09:11:17+0530 INFO Setting run status of 'truefoundry/user-truefoundry/cj-metaflow-tf/run-2023-02-17-09-10-28' to 'FINISHED'
+2023-02-17 09:11:18.205 [1676605216007443/evaluate/3 (pid 44960)] Finished run: 'truefoundry/user-truefoundry/cj-metaflow-tf/run-2023-02-17-09-10-28', Dashboard: https://app.devtest.truefoundry.tech/mlfoundry/100/run/a77cb6fcb21149d09a24025757b95498/
+2023-02-17 09:11:24.303 [1676605216007443/evaluate/3 (pid 44960)] Logged model fqn is model:truefoundry/user-truefoundry/cj-metaflow-tf/rf_model:3
+2023-02-17 09:11:24.305 [1676605216007443/evaluate/3 (pid 44960)] Task finished successfully.
+2023-02-17 09:11:24.851 [1676605216007443/create_report/4 (pid 44991)] Task is starting.
+2023-02-17 09:11:26.749 [1676605216007443/create_report/4 (pid 44991)] Task finished successfully.
+2023-02-17 09:11:27.226 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] Task is starting.
+2023-02-17 09:11:27.584 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] Pip Install: servicefoundry 0.6.6
+2023-02-17 09:11:28.571 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] Pip Install Done
+2023-02-17 09:11:32.951 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:Logged in to 'https://app.devtest.truefoundry.tech' as '[redacted]' ([redacted])
+2023-02-17 09:11:34.351 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:Uploading code for service 'cj-metaflow-tf-taxi-rf'
+2023-02-17 09:11:34.359 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:Archiving contents of dir: '/Users/chiragjn/tf/truefoundry-examples/metaflow-tf'
+2023-02-17 09:11:34.395 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:.tfyignore file found in /Users/chiragjn/tf/truefoundry-examples/metaflow-tf
+Packaging source code: 2it [00:00, 214.04it/s]oy_to_truefoundry/5 (pid 45000)] Packaging source code: 0it [00:00, ?it/s]
+2023-02-17 09:11:34.406 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:Code archive size: '3.59 KiB'
+Uploading package: 100%|██████████| 3.59k/3.59k [01:16<00:00, 48.4B/s] 45000)] Uploading package:   0%|          | 0.00/3.59k [00:00<?, ?B/s]
+2023-02-17 09:13:20.416 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:🚀 Deployment started for application 'cj-metaflow-tf-taxi-rf'. Deployment FQN is 'tfy-ctl-euwe1-devtest:tfy-demo:cj-metaflow-tf-taxi-rf:3'.
+2023-02-17 09:13:24.915 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:You can track the progress below or on the dashboard:- 'https://app.devtest.truefoundry.tech/applications/cle7ymghp121r1hg941big6dp?tab=deployments'
+2023-02-17 09:13:30.119 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] You can press Ctrl + C to exit the tailing of build logs and deployment will continue on the server
+2023-02-17 09:13:30.120 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:State: 'BUILDING'
+2023-02-17 09:13:35.659 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:Tailing build logs for 'cj-metaflow-tf-taxi-rf'
+2023-02-17 09:13:35.665 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] Waiting for the task to start...
+2023-02-17 09:13:47.430 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:39.880927+05:30] [Start] Downloading source code from remote source
+2023-02-17 09:13:47.432 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:40.146439+05:30] [Done] Download code completed
+2023-02-17 09:13:59.105 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:57.781605+05:30] [Start] Building and pushing the docker container. Please find the logs below
+2023-02-17 09:13:59.109 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.228824+05:30] Login Succeeded
+2023-02-17 09:13:59.113 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.230051+05:30] [==== Docker logs start ====]
+2023-02-17 09:13:59.114 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888454+05:30] latest: Pulling from tfy-demo-cj-metaflow-tf-taxi-rf-ig6dp
+2023-02-17 09:13:59.115 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888476+05:30] 1e4aec178e08: Pulling fs layer
+2023-02-17 09:13:59.116 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888480+05:30] 6c1024729fee: Pulling fs layer
+2023-02-17 09:13:59.117 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888483+05:30] c3aa11fbc85a: Pulling fs layer
+2023-02-17 09:13:59.117 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888486+05:30] aa54add66b3a: Pulling fs layer
+2023-02-17 09:13:59.118 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888505+05:30] 9e3a60c2bce7: Pulling fs layer
+2023-02-17 09:13:59.119 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888509+05:30] 3b2123ce9d0d: Pulling fs layer
+2023-02-17 09:13:59.329 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888512+05:30] 079055eff04f: Pulling fs layer
+2023-02-17 09:13:59.330 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888515+05:30] efbdad4af3b4: Pulling fs layer
+2023-02-17 09:13:59.331 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888538+05:30] 6052bc42f4a6: Pulling fs layer
+2023-02-17 09:13:59.332 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888547+05:30] 86450d42e785: Pulling fs layer
+2023-02-17 09:13:59.333 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888550+05:30] 3b2123ce9d0d: Waiting
+2023-02-17 09:13:59.336 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888552+05:30] aa54add66b3a: Waiting
+2023-02-17 09:13:59.336 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888564+05:30] 079055eff04f: Waiting
+2023-02-17 09:13:59.337 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888570+05:30] 9e3a60c2bce7: Waiting
+2023-02-17 09:13:59.339 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888575+05:30] efbdad4af3b4: Waiting
+2023-02-17 09:13:59.340 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888578+05:30] 86450d42e785: Waiting
+2023-02-17 09:13:59.341 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:58.888599+05:30] 6052bc42f4a6: Waiting
+2023-02-17 09:13:59.984 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:59.594286+05:30] 6c1024729fee: Verifying Checksum
+2023-02-17 09:13:59.986 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:13:59.594311+05:30] 6c1024729fee: Download complete
+2023-02-17 09:14:01.489 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:00.124523+05:30] c3aa11fbc85a: Verifying Checksum
+2023-02-17 09:14:01.490 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:00.124551+05:30] c3aa11fbc85a: Download complete
+2023-02-17 09:14:03.497 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:02.196047+05:30] 1e4aec178e08: Verifying Checksum
+2023-02-17 09:14:03.498 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:02.196073+05:30] 1e4aec178e08: Download complete
+2023-02-17 09:14:07.094 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:06.133093+05:30] 1e4aec178e08: Pull complete
+2023-02-17 09:14:07.097 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:06.286057+05:30] 3b2123ce9d0d: Verifying Checksum
+2023-02-17 09:14:07.099 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:06.286077+05:30] 3b2123ce9d0d: Download complete
+2023-02-17 09:14:07.996 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:06.701244+05:30] 6c1024729fee: Pull complete
+2023-02-17 09:14:07.997 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:07.222942+05:30] c3aa11fbc85a: Pull complete
+2023-02-17 09:14:08.000 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:07.497860+05:30] aa54add66b3a: Verifying Checksum
+2023-02-17 09:14:08.000 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:07.497914+05:30] aa54add66b3a: Download complete
+2023-02-17 09:14:09.550 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:08.178336+05:30] efbdad4af3b4: Verifying Checksum
+2023-02-17 09:14:09.551 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:08.178373+05:30] efbdad4af3b4: Download complete
+2023-02-17 09:14:12.106 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:11.215495+05:30] 6052bc42f4a6: Download complete
+2023-02-17 09:14:13.010 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:11.810823+05:30] aa54add66b3a: Pull complete
+2023-02-17 09:14:13.011 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:12.008392+05:30] 86450d42e785: Verifying Checksum
+2023-02-17 09:14:13.014 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:12.008416+05:30] 86450d42e785: Download complete
+2023-02-17 09:14:14.018 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:12.721914+05:30] 079055eff04f: Verifying Checksum
+2023-02-17 09:14:14.020 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:12.721946+05:30] 079055eff04f: Download complete
+2023-02-17 09:14:16.519 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:15.838993+05:30] 9e3a60c2bce7: Verifying Checksum
+2023-02-17 09:14:16.521 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:15.839018+05:30] 9e3a60c2bce7: Download complete
+2023-02-17 09:14:22.524 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:22.015055+05:30] 9e3a60c2bce7: Pull complete
+2023-02-17 09:14:22.525 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:22.300285+05:30] 3b2123ce9d0d: Pull complete
+2023-02-17 09:14:24.093 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:22.899408+05:30] 079055eff04f: Pull complete
+2023-02-17 09:14:24.094 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:22.946470+05:30] efbdad4af3b4: Pull complete
+2023-02-17 09:14:24.097 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:23.150078+05:30] 6052bc42f4a6: Pull complete
+2023-02-17 09:14:24.099 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:23.222265+05:30] 86450d42e785: Pull complete
+2023-02-17 09:14:24.100 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:23.231400+05:30] Digest: sha256:f80d759265758964ebc96a1db4846fdd1fb5302699a8c512ee68ca3ba13f6d72
+2023-02-17 09:14:24.102 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:23.234734+05:30] Status: Downloaded newer image for 526077812922.dkr.ecr.eu-west-1.amazonaws.com/tfy-demo-cj-metaflow-tf-taxi-rf-ig6dp:latest
+2023-02-17 09:14:24.102 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:23.237669+05:30] 526077812922.dkr.ecr.eu-west-1.amazonaws.com/tfy-demo-cj-metaflow-tf-taxi-rf-ig6dp:latest
+2023-02-17 09:14:26.703 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.888321+05:30] [02/17/23 03:44:25] INFO     Dockerfile content:-
+2023-02-17 09:14:26.713 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890568+05:30] INFO
+2023-02-17 09:14:26.715 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890588+05:30] FROM --platform=linux/amd64 python:3.9
+2023-02-17 09:14:26.716 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890591+05:30]
+2023-02-17 09:14:26.717 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890594+05:30]
+2023-02-17 09:14:26.718 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890597+05:30]
+2023-02-17 09:14:26.719 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890599+05:30] COPY predict_requirements.txt /tmp/requirements.txt
+2023-02-17 09:14:26.724 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890602+05:30]
+2023-02-17 09:14:26.726 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890604+05:30] RUN python -m pip install -U pip && python -m pip
+2023-02-17 09:14:26.862 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890606+05:30] install --no-cache-dir -r /tmp/requirements.txt
+2023-02-17 09:14:26.864 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890608+05:30]
+2023-02-17 09:14:26.866 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890610+05:30] COPY . /app
+2023-02-17 09:14:26.867 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890613+05:30] WORKDIR /app
+2023-02-17 09:14:26.868 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890615+05:30] ENTRYPOINT uvicorn app:app --port 8080 --host
+2023-02-17 09:14:26.870 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890616+05:30] 0.0.0.0
+2023-02-17 09:14:26.871 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.890619+05:30]
+2023-02-17 09:14:26.872 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:25.891516+05:30] INFO     Starting docker build...
+2023-02-17 09:14:27.581 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:26.048632+05:30] Step 1/6 : FROM --platform=linux/amd64 python:3.9
+2023-02-17 09:14:27.582 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.048078+05:30] 3.9: Pulling from library/python
+2023-02-17 09:14:28.531 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.317705+05:30] 1e4aec178e08: Already exists
+2023-02-17 09:14:28.532 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.321014+05:30] 6c1024729fee: Already exists
+2023-02-17 09:14:28.535 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.324181+05:30] c3aa11fbc85a: Already exists
+2023-02-17 09:14:28.535 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.328089+05:30] aa54add66b3a: Already exists
+2023-02-17 09:14:28.536 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.331072+05:30] 9e3a60c2bce7: Already exists
+2023-02-17 09:14:28.538 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.334371+05:30] 3b2123ce9d0d: Already exists
+2023-02-17 09:14:28.539 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.337634+05:30] 079055eff04f: Already exists
+2023-02-17 09:14:28.540 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.340678+05:30] efbdad4af3b4: Already exists
+2023-02-17 09:14:28.540 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.344532+05:30] 6052bc42f4a6: Already exists
+2023-02-17 09:14:28.541 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.578639+05:30] Digest: sha256:6f859d00a885892c341af52acc035654404f863ae41121ac42027d18dec5a86c
+2023-02-17 09:14:28.542 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.581138+05:30] Status: Downloaded newer image for python:3.9
+2023-02-17 09:14:28.704 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.583819+05:30] ---> c88448dbdd7f
+2023-02-17 09:14:28.706 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:27.584301+05:30] Step 2/6 : COPY predict_requirements.txt /tmp/requirements.txt
+2023-02-17 09:14:33.612 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:32.566653+05:30] ---> 664c11254f6e
+2023-02-17 09:14:33.613 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:32.567230+05:30] Step 3/6 : RUN python -m pip install -U pip && python -m pip install
+2023-02-17 09:14:33.617 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:32.567252+05:30] --no-cache-dir -r /tmp/requirements.txt
+2023-02-17 09:14:33.617 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:32.584520+05:30] ---> Running in 3af8f08b3193
+2023-02-17 09:14:36.028 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:34.927392+05:30] Requirement already satisfied: pip in /usr/local/lib/python3.9/site-packages
+2023-02-17 09:14:36.029 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:34.927416+05:30] (22.0.4)
+2023-02-17 09:14:36.035 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:35.066334+05:30] Collecting pip
+2023-02-17 09:14:36.039 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:35.092975+05:30] Downloading pip-23.0-py3-none-any.whl (2.1 MB)
+2023-02-17 09:14:36.040 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:35.168531+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 28.8 MB/s eta 0:00:00
+2023-02-17 09:14:36.042 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:35.215603+05:30] Installing collected packages: pip
+2023-02-17 09:14:36.044 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:35.215956+05:30] Attempting uninstall: pip
+2023-02-17 09:14:36.045 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:35.216448+05:30] Found existing installation: pip 22.0.4
+2023-02-17 09:14:36.047 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:35.375051+05:30] Uninstalling pip-22.0.4:
+2023-02-17 09:14:37.048 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:35.883808+05:30] Successfully uninstalled pip-22.0.4
+2023-02-17 09:14:38.533 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:37.385695+05:30] Successfully installed pip-23.0
+2023-02-17 09:14:38.535 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:37.386670+05:30] WARNING: Running pip as the 'root' user can result in broken permissions and
+2023-02-17 09:14:38.538 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:37.386691+05:30] conflicting behaviour with the system package manager. It is recommended to use
+2023-02-17 09:14:38.540 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:37.386695+05:30] a virtual environment instead: https://pip.pypa.io/warnings/venv
+2023-02-17 09:14:38.541 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:37.386699+05:30]
+2023-02-17 09:14:39.535 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:38.242563+05:30] Collecting scikit-learn==1.1.2
+2023-02-17 09:14:39.537 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:38.271271+05:30] Downloading
+2023-02-17 09:14:39.541 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:38.271294+05:30] scikit_learn-1.1.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+2023-02-17 09:14:39.542 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:38.271298+05:30] (30.8 MB)
+2023-02-17 09:14:40.535 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:39.280361+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 30.8/30.8 MB 30.1 MB/s eta 0:00:00
+2023-02-17 09:14:40.536 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:39.638930+05:30] Collecting pandas==1.4.2
+2023-02-17 09:14:40.541 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:39.645740+05:30] Downloading
+2023-02-17 09:14:40.541 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:39.645771+05:30] pandas-1.4.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (11.7 MB)
+2023-02-17 09:14:40.543 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.012566+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.7/11.7 MB 30.8 MB/s eta 0:00:00
+2023-02-17 09:14:40.544 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.124485+05:30] Collecting mlfoundry==0.6.1
+2023-02-17 09:14:40.544 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.130587+05:30] Downloading mlfoundry-0.6.1-py3-none-any.whl (128 kB)
+2023-02-17 09:14:40.545 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.134784+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 128.1/128.1 kB 78.9 MB/s eta 0:00:00
+2023-02-17 09:14:41.601 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.322219+05:30] Collecting pydantic==1.10.2
+2023-02-17 09:14:41.602 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.329315+05:30] Downloading
+2023-02-17 09:14:41.608 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.329340+05:30] pydantic-1.10.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (13.2
+2023-02-17 09:14:41.609 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.329345+05:30] MB)
+2023-02-17 09:14:41.610 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.716801+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 13.2/13.2 MB 32.3 MB/s eta 0:00:00
+2023-02-17 09:14:41.611 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.853604+05:30] Collecting fastapi==0.82.0
+2023-02-17 09:14:41.612 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.859303+05:30] Downloading fastapi-0.82.0-py3-none-any.whl (55 kB)
+2023-02-17 09:14:41.613 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.862563+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 55.3/55.3 kB 161.5 MB/s eta 0:00:00
+2023-02-17 09:14:41.613 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.912548+05:30] Collecting uvicorn==0.18.3
+2023-02-17 09:14:41.614 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.918291+05:30] Downloading uvicorn-0.18.3-py3-none-any.whl (57 kB)
+2023-02-17 09:14:41.615 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.921526+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 57.4/57.4 kB 142.7 MB/s eta 0:00:00
+2023-02-17 09:14:41.785 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.976553+05:30] Collecting threadpoolctl>=2.0.0
+2023-02-17 09:14:41.786 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:40.981627+05:30] Downloading threadpoolctl-3.1.0-py3-none-any.whl (14 kB)
+2023-02-17 09:14:41.789 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:41.190593+05:30] Collecting scipy>=1.3.2
+2023-02-17 09:14:41.789 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:41.197364+05:30] Downloading
+2023-02-17 09:14:41.790 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:41.197400+05:30] scipy-1.10.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (34.4 MB)
+2023-02-17 09:14:43.039 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:42.305574+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 34.4/34.4 MB 32.5 MB/s eta 0:00:00
+2023-02-17 09:14:44.057 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:42.773496+05:30] Collecting numpy>=1.17.3
+2023-02-17 09:14:44.058 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:42.778997+05:30] Downloading
+2023-02-17 09:14:44.061 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:42.779020+05:30] numpy-1.24.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (17.3 MB)
+2023-02-17 09:14:44.062 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.327053+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 17.3/17.3 MB 31.1 MB/s eta 0:00:00
+2023-02-17 09:14:44.063 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.440221+05:30] Collecting joblib>=1.0.0
+2023-02-17 09:14:44.064 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.444987+05:30] Downloading joblib-1.2.0-py3-none-any.whl (297 kB)
+2023-02-17 09:14:44.065 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.454756+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 298.0/298.0 kB 42.1 MB/s eta 0:00:00
+2023-02-17 09:14:44.065 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.541114+05:30] Collecting python-dateutil>=2.8.1
+2023-02-17 09:14:44.066 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.546361+05:30] Downloading python_dateutil-2.8.2-py2.py3-none-any.whl (247 kB)
+2023-02-17 09:14:44.068 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.554425+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 247.7/247.7 kB 44.6 MB/s eta 0:00:00
+2023-02-17 09:14:44.233 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.633915+05:30] Collecting pytz>=2020.1
+2023-02-17 09:14:44.234 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.639258+05:30] Downloading pytz-2022.7.1-py2.py3-none-any.whl (499 kB)
+2023-02-17 09:14:44.237 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.651214+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 499.4/499.4 kB 53.3 MB/s eta 0:00:00
+2023-02-17 09:14:44.239 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.759259+05:30] Collecting fastparquet<=2022.12.0,>=0.8.0
+2023-02-17 09:14:45.041 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.765843+05:30] Downloading
+2023-02-17 09:14:45.042 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.765898+05:30] fastparquet-2022.12.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+2023-02-17 09:14:45.043 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.765905+05:30] (1.6 MB)
+2023-02-17 09:14:45.044 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:43.802434+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.6/1.6 MB 45.6 MB/s eta 0:00:00
+2023-02-17 09:14:45.045 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.008830+05:30] Collecting whylogs<0.7.0,>=0.6.15
+2023-02-17 09:14:45.046 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.017792+05:30] Downloading whylogs-0.6.30-py3-none-any.whl (2.1 MB)
+2023-02-17 09:14:45.048 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.065863+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 46.4 MB/s eta 0:00:00
+2023-02-17 09:14:45.049 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.154099+05:30] Collecting importlib-metadata<5.0.0,>=4.11.3
+2023-02-17 09:14:45.050 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.159116+05:30] Downloading importlib_metadata-4.13.0-py3-none-any.whl (23 kB)
+2023-02-17 09:14:45.051 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.193160+05:30] Collecting filelock<4.0.0,>=3.8.0
+2023-02-17 09:14:45.204 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.198007+05:30] Downloading filelock-3.9.0-py3-none-any.whl (9.7 kB)
+2023-02-17 09:14:45.210 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.239306+05:30] Collecting packaging<22.0,>=21.3
+2023-02-17 09:14:45.211 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.243998+05:30] Downloading packaging-21.3-py3-none-any.whl (40 kB)
+2023-02-17 09:14:45.212 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.246905+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 40.8/40.8 kB 124.9 MB/s eta 0:00:00
+2023-02-17 09:14:45.214 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.353278+05:30] Collecting amplitude-tracker<0.0.8,>=0.0.7
+2023-02-17 09:14:45.216 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.358808+05:30] Downloading amplitude_tracker-0.0.7-py2.py3-none-any.whl (15 kB)
+2023-02-17 09:14:45.217 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.388016+05:30] Collecting tfy-mlflow-client==0.0.22
+2023-02-17 09:14:45.217 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.396141+05:30] Downloading tfy_mlflow_client-0.0.22-py3-none-any.whl (3.4 MB)
+2023-02-17 09:14:45.219 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.493204+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.4/3.4 MB 36.0 MB/s eta 0:00:00
+2023-02-17 09:14:45.220 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.527519+05:30] Collecting numpy>=1.17.3
+2023-02-17 09:14:45.221 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.533166+05:30] Downloading
+2023-02-17 09:14:45.224 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:44.533190+05:30] numpy-1.23.5-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (17.1 MB)
+2023-02-17 09:14:46.040 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.123610+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 17.1/17.1 MB 26.5 MB/s eta 0:00:00
+2023-02-17 09:14:46.042 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.248811+05:30] Collecting GitPython<4.0.0,>=3.1.26
+2023-02-17 09:14:46.044 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.253886+05:30] Downloading GitPython-3.1.31-py3-none-any.whl (184 kB)
+2023-02-17 09:14:46.046 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.258742+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 184.3/184.3 kB 74.9 MB/s eta 0:00:00
+2023-02-17 09:14:46.046 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.428223+05:30] Collecting psutil<6.0.0,>=5.9.0
+2023-02-17 09:14:46.047 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.433807+05:30] Downloading
+2023-02-17 09:14:46.048 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.433829+05:30] psutil-5.9.4-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17
+2023-02-17 09:14:46.049 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.433832+05:30] _x86_64.manylinux2014_x86_64.whl (280 kB)
+2023-02-17 09:14:46.049 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.440303+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 280.2/280.2 kB 61.9 MB/s eta 0:00:00
+2023-02-17 09:14:46.050 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.568229+05:30] Collecting pyarrow<9.0.0,>=5.0.0
+2023-02-17 09:14:46.206 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.573300+05:30] Downloading
+2023-02-17 09:14:46.207 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:45.573323+05:30] pyarrow-8.0.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (29.4 MB)
+2023-02-17 09:14:47.640 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:46.517123+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 29.4/29.4 MB 31.4 MB/s eta 0:00:00
+2023-02-17 09:14:47.641 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:46.666892+05:30] Collecting click<9.0.0,>=8.0.0
+2023-02-17 09:14:47.645 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:46.671509+05:30] Downloading click-8.1.3-py3-none-any.whl (96 kB)
+2023-02-17 09:14:47.646 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:46.674950+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 96.6/96.6 kB 147.8 MB/s eta 0:00:00
+2023-02-17 09:14:48.544 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.298012+05:30] Collecting boto3<2.0.0,>=1.14.1
+2023-02-17 09:14:48.545 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.303375+05:30] Downloading boto3-1.26.73-py3-none-any.whl (132 kB)
+2023-02-17 09:14:48.546 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.307939+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 132.7/132.7 kB 97.9 MB/s eta 0:00:00
+2023-02-17 09:14:48.549 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.457947+05:30] Collecting coolname<2.0.0,>=1.1.0
+2023-02-17 09:14:48.551 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.464083+05:30] Downloading coolname-1.1.0-py2.py3-none-any.whl (35 kB)
+2023-02-17 09:14:48.552 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.505530+05:30] Collecting typing-extensions>=4.1.0
+2023-02-17 09:14:48.553 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.510672+05:30] Downloading typing_extensions-4.5.0-py3-none-any.whl (27 kB)
+2023-02-17 09:14:48.554 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.607598+05:30] Collecting starlette==0.19.1
+2023-02-17 09:14:48.555 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.612508+05:30] Downloading starlette-0.19.1-py3-none-any.whl (63 kB)
+2023-02-17 09:14:48.556 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.615515+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 63.3/63.3 kB 153.5 MB/s eta 0:00:00
+2023-02-17 09:14:48.725 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.667973+05:30] Collecting h11>=0.8
+2023-02-17 09:14:48.726 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.673162+05:30] Downloading h11-0.14.0-py3-none-any.whl (58 kB)
+2023-02-17 09:14:48.728 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.676075+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 58.3/58.3 kB 136.5 MB/s eta 0:00:00
+2023-02-17 09:14:48.729 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.733901+05:30] Collecting anyio<5,>=3.4.0
+2023-02-17 09:14:48.732 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.738982+05:30] Downloading anyio-3.6.2-py3-none-any.whl (80 kB)
+2023-02-17 09:14:48.734 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.742167+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 80.6/80.6 kB 119.8 MB/s eta 0:00:00
+2023-02-17 09:14:48.735 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.800527+05:30] Collecting sqlparse>=0.3.1
+2023-02-17 09:14:48.735 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.805149+05:30] Downloading sqlparse-0.4.3-py3-none-any.whl (42 kB)
+2023-02-17 09:14:48.736 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.808056+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 42.8/42.8 kB 105.9 MB/s eta 0:00:00
+2023-02-17 09:14:48.737 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.842295+05:30] Collecting databricks-cli>=0.8.7
+2023-02-17 09:14:48.737 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.847624+05:30] Downloading databricks-cli-0.17.4.tar.gz (82 kB)
+2023-02-17 09:14:48.738 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.851518+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 82.3/82.3 kB 130.0 MB/s eta 0:00:00
+2023-02-17 09:14:48.755 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:47.885470+05:30] Preparing metadata (setup.py): started
+2023-02-17 09:14:49.546 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.249310+05:30] Preparing metadata (setup.py): finished with status 'done'
+2023-02-17 09:14:49.547 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.322879+05:30] Collecting pyyaml>=5.1
+2023-02-17 09:14:49.550 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.328420+05:30] Downloading
+2023-02-17 09:14:49.552 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.328450+05:30] PyYAML-6.0-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_6
+2023-02-17 09:14:49.552 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.328455+05:30] 4.manylinux2010_x86_64.whl (661 kB)
+2023-02-17 09:14:49.554 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.343520+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 661.8/661.8 kB 55.6 MB/s eta 0:00:00
+2023-02-17 09:14:49.555 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.378819+05:30] Collecting cloudpickle
+2023-02-17 09:14:49.555 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.383743+05:30] Downloading cloudpickle-2.2.1-py3-none-any.whl (25 kB)
+2023-02-17 09:14:49.556 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.700423+05:30] Collecting protobuf<5.0,>=3.12
+2023-02-17 09:14:49.557 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.705614+05:30] Downloading protobuf-4.22.0-cp37-abi3-manylinux2014_x86_64.whl (302 kB)
+2023-02-17 09:14:49.558 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.714614+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 302.4/302.4 kB 48.0 MB/s eta 0:00:00
+2023-02-17 09:14:49.724 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.738962+05:30] Collecting entrypoints
+2023-02-17 09:14:49.725 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.743818+05:30] Downloading entrypoints-0.4-py3-none-any.whl (5.3 kB)
+2023-02-17 09:14:49.727 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.820036+05:30] Collecting requests>=2.17.3
+2023-02-17 09:14:49.728 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.824928+05:30] Downloading requests-2.28.2-py3-none-any.whl (62 kB)
+2023-02-17 09:14:49.730 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.827884+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.8/62.8 kB 139.6 MB/s eta 0:00:00
+2023-02-17 09:14:49.731 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.887668+05:30] Collecting backoff==1.10.0
+2023-02-17 09:14:49.732 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.892772+05:30] Downloading backoff-1.10.0-py2.py3-none-any.whl (31 kB)
+2023-02-17 09:14:49.733 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.922714+05:30] Collecting six>=1.5
+2023-02-17 09:14:49.736 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.927784+05:30] Downloading six-1.16.0-py2.py3-none-any.whl (11 kB)
+2023-02-17 09:14:49.738 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.954551+05:30] Collecting monotonic>=1.5
+2023-02-17 09:14:49.739 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:48.960587+05:30] Downloading monotonic-1.6-py2.py3-none-any.whl (8.2 kB)
+2023-02-17 09:14:50.595 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:49.704532+05:30] Collecting botocore<1.30.0,>=1.29.73
+2023-02-17 09:14:50.600 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:49.709255+05:30] Downloading botocore-1.29.73-py3-none-any.whl (10.4 MB)
+2023-02-17 09:14:50.603 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.015887+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.4/10.4 MB 34.0 MB/s eta 0:00:00
+2023-02-17 09:14:50.604 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.099404+05:30] Collecting s3transfer<0.7.0,>=0.6.0
+2023-02-17 09:14:50.605 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.104277+05:30] Downloading s3transfer-0.6.0-py3-none-any.whl (79 kB)
+2023-02-17 09:14:50.607 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.107548+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 79.6/79.6 kB 136.4 MB/s eta 0:00:00
+2023-02-17 09:14:50.610 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.134966+05:30] Collecting jmespath<2.0.0,>=0.7.1
+2023-02-17 09:14:50.611 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.139491+05:30] Downloading jmespath-1.0.1-py3-none-any.whl (20 kB)
+2023-02-17 09:14:50.611 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.168323+05:30] Collecting fastparquet<=2022.12.0,>=0.8.0
+2023-02-17 09:14:50.611 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.179737+05:30] Downloading
+2023-02-17 09:14:50.764 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.179765+05:30] fastparquet-2022.11.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+2023-02-17 09:14:50.766 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.179770+05:30] (1.6 MB)
+2023-02-17 09:14:50.768 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.211955+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.6/1.6 MB 54.4 MB/s eta 0:00:00
+2023-02-17 09:14:50.771 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.234140+05:30] Downloading
+2023-02-17 09:14:50.773 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.234164+05:30] fastparquet-0.8.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.5
+2023-02-17 09:14:50.774 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.234168+05:30] MB)
+2023-02-17 09:14:51.550 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.281273+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.5/1.5 MB 34.5 MB/s eta 0:00:00
+2023-02-17 09:14:51.552 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.336233+05:30] Collecting fsspec
+2023-02-17 09:14:51.556 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.341121+05:30] Downloading fsspec-2023.1.0-py3-none-any.whl (143 kB)
+2023-02-17 09:14:51.558 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.346470+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 143.0/143.0 kB 66.3 MB/s eta 0:00:00
+2023-02-17 09:14:51.559 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.498793+05:30] Collecting cramjam>=2.3.0
+2023-02-17 09:14:51.560 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.503918+05:30] Downloading
+2023-02-17 09:14:51.561 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.503957+05:30] cramjam-2.6.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.0 MB)
+2023-02-17 09:14:51.562 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.552878+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 43.3 MB/s eta 0:00:00
+2023-02-17 09:14:51.562 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.607986+05:30] Collecting gitdb<5,>=4.0.1
+2023-02-17 09:14:51.563 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.613027+05:30] Downloading gitdb-4.0.10-py3-none-any.whl (62 kB)
+2023-02-17 09:14:51.724 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.616222+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.7/62.7 kB 147.8 MB/s eta 0:00:00
+2023-02-17 09:14:51.725 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.686364+05:30] Collecting zipp>=0.5
+2023-02-17 09:14:51.728 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.691449+05:30] Downloading zipp-3.13.0-py3-none-any.whl (6.7 kB)
+2023-02-17 09:14:51.729 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.763453+05:30] Collecting pyparsing!=3.0.5,>=2.0.2
+2023-02-17 09:14:51.731 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.768230+05:30] Downloading pyparsing-3.0.9-py3-none-any.whl (98 kB)
+2023-02-17 09:14:51.732 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:50.771703+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 98.3/98.3 kB 143.1 MB/s eta 0:00:00
+2023-02-17 09:14:51.733 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.177434+05:30] Collecting puremagic<2.0,>=1.10
+2023-02-17 09:14:51.734 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.183651+05:30] Downloading puremagic-1.14-py3-none-any.whl (32 kB)
+2023-02-17 09:14:51.735 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.279474+05:30] Collecting tqdm<5.0.0,>=4.60.0
+2023-02-17 09:14:51.736 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.286041+05:30] Downloading tqdm-4.64.1-py2.py3-none-any.whl (78 kB)
+2023-02-17 09:14:51.741 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.289081+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 78.5/78.5 kB 69.9 MB/s eta 0:00:00
+2023-02-17 09:14:51.742 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.368598+05:30] Collecting marshmallow>=3.7.1
+2023-02-17 09:14:51.743 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.373317+05:30] Downloading marshmallow-3.19.0-py3-none-any.whl (49 kB)
+2023-02-17 09:14:51.743 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.376210+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 49.1/49.1 kB 131.6 MB/s eta 0:00:00
+2023-02-17 09:14:51.744 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.499635+05:30] Collecting whylabs-datasketches>=2.2.0b1
+2023-02-17 09:14:51.745 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.506828+05:30] Downloading whylabs_datasketches-2.2.0b1-cp39-cp39-manylinux2010_x86_64.whl
+2023-02-17 09:14:51.746 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.506846+05:30] (404 kB)
+2023-02-17 09:14:51.747 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.516644+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 404.2/404.2 kB 67.1 MB/s eta 0:00:00
+2023-02-17 09:14:53.051 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.641988+05:30] Collecting whylabs-client<0.4.0,>=0.3.0
+2023-02-17 09:14:53.052 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.648515+05:30] Downloading whylabs_client-0.3.0-py3-none-any.whl (183 kB)
+2023-02-17 09:14:53.054 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.653951+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 183.6/183.6 kB 59.5 MB/s eta 0:00:00
+2023-02-17 09:14:53.056 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.708305+05:30] Collecting jsonschema>=3.2.0
+2023-02-17 09:14:53.058 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.713245+05:30] Downloading jsonschema-4.17.3-py3-none-any.whl (90 kB)
+2023-02-17 09:14:53.060 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.716296+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 90.4/90.4 kB 116.2 MB/s eta 0:00:00
+2023-02-17 09:14:53.061 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.963046+05:30] Collecting matplotlib<4.0.0,>=3.0.3
+2023-02-17 09:14:53.061 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.970361+05:30] Downloading
+2023-02-17 09:14:53.063 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.970387+05:30] matplotlib-3.7.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (11.6
+2023-02-17 09:14:53.063 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:51.970391+05:30] MB)
+2023-02-17 09:14:53.251 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.309042+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.6/11.6 MB 33.0 MB/s eta 0:00:00
+2023-02-17 09:14:53.261 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.387868+05:30] Collecting smart-open>=4.1.2
+2023-02-17 09:14:53.263 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.394114+05:30] Downloading smart_open-6.3.0-py3-none-any.whl (56 kB)
+2023-02-17 09:14:53.264 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.397748+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 56.8/56.8 kB 93.1 MB/s eta 0:00:00
+2023-02-17 09:14:53.264 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.448296+05:30] Collecting sniffio>=1.1
+2023-02-17 09:14:53.265 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.453511+05:30] Downloading sniffio-1.3.0-py3-none-any.whl (10 kB)
+2023-02-17 09:14:53.266 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.482432+05:30] Collecting idna>=2.8
+2023-02-17 09:14:53.266 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.487548+05:30] Downloading idna-3.4-py3-none-any.whl (61 kB)
+2023-02-17 09:14:53.267 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.490764+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.5/61.5 kB 146.8 MB/s eta 0:00:00
+2023-02-17 09:14:54.053 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.561397+05:30] Collecting urllib3<1.27,>=1.25.4
+2023-02-17 09:14:54.057 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.566354+05:30] Downloading urllib3-1.26.14-py2.py3-none-any.whl (140 kB)
+2023-02-17 09:14:54.058 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.570781+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 140.6/140.6 kB 101.6 MB/s eta 0:00:00
+2023-02-17 09:14:54.059 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.628394+05:30] Collecting pyjwt>=1.7.0
+2023-02-17 09:14:54.061 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.633129+05:30] Downloading PyJWT-2.6.0-py3-none-any.whl (20 kB)
+2023-02-17 09:14:54.061 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.663110+05:30] Collecting oauthlib>=3.1.0
+2023-02-17 09:14:54.062 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.668130+05:30] Downloading oauthlib-3.2.2-py3-none-any.whl (151 kB)
+2023-02-17 09:14:54.063 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.672418+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 151.7/151.7 kB 77.1 MB/s eta 0:00:00
+2023-02-17 09:14:54.064 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.699474+05:30] Collecting tabulate>=0.7.7
+2023-02-17 09:14:54.064 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.704052+05:30] Downloading tabulate-0.9.0-py3-none-any.whl (35 kB)
+2023-02-17 09:14:54.226 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.813527+05:30] Collecting smmap<6,>=3.0.1
+2023-02-17 09:14:54.228 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.818475+05:30] Downloading smmap-5.0.0-py3-none-any.whl (24 kB)
+2023-02-17 09:14:54.232 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.885132+05:30] Collecting attrs>=17.4.0
+2023-02-17 09:14:54.233 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.889696+05:30] Downloading attrs-22.2.0-py3-none-any.whl (60 kB)
+2023-02-17 09:14:54.235 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.892566+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 60.0/60.0 kB 117.4 MB/s eta 0:00:00
+2023-02-17 09:14:54.235 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.946728+05:30] Collecting pyrsistent!=0.17.0,!=0.17.1,!=0.17.2,>=0.14.0
+2023-02-17 09:14:54.236 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.951605+05:30] Downloading pyrsistent-0.19.3-py3-none-any.whl (57 kB)
+2023-02-17 09:14:54.238 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:52.954623+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 57.5/57.5 kB 127.2 MB/s eta 0:00:00
+2023-02-17 09:14:54.239 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.086892+05:30] Collecting kiwisolver>=1.0.1
+2023-02-17 09:14:54.241 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.092265+05:30] Downloading
+2023-02-17 09:14:54.242 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.092299+05:30] kiwisolver-1.4.4-cp39-cp39-manylinux_2_12_x86_64.manylinux2010_x86_64.whl (1.6
+2023-02-17 09:14:54.243 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.092304+05:30] MB)
+2023-02-17 09:14:54.244 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.126284+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.6/1.6 MB 50.3 MB/s eta 0:00:00
+2023-02-17 09:14:54.244 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.205285+05:30] Collecting importlib-resources>=3.2.0
+2023-02-17 09:14:54.245 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.210124+05:30] Downloading importlib_resources-5.10.2-py3-none-any.whl (34 kB)
+2023-02-17 09:14:54.245 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.322695+05:30] Collecting contourpy>=1.0.1
+2023-02-17 09:14:54.246 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.328997+05:30] Downloading
+2023-02-17 09:14:54.246 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.329027+05:30] contourpy-1.0.7-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (299
+2023-02-17 09:14:54.247 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.329032+05:30] kB)
+2023-02-17 09:14:54.247 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.337127+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 299.7/299.7 kB 55.6 MB/s eta 0:00:00
+2023-02-17 09:14:54.248 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.426576+05:30] Collecting fonttools>=4.22.0
+2023-02-17 09:14:54.248 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.433065+05:30] Downloading fonttools-4.38.0-py3-none-any.whl (965 kB)
+2023-02-17 09:14:54.249 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.456931+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 965.4/965.4 kB 46.8 MB/s eta 0:00:00
+2023-02-17 09:14:54.249 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.502377+05:30] Collecting cycler>=0.10
+2023-02-17 09:14:54.250 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.507145+05:30] Downloading cycler-0.11.0-py3-none-any.whl (6.4 kB)
+2023-02-17 09:14:55.051 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.843477+05:30] Collecting pillow>=6.2.0
+2023-02-17 09:14:55.053 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.849045+05:30] Downloading Pillow-9.4.0-cp39-cp39-manylinux_2_28_x86_64.whl (3.4 MB)
+2023-02-17 09:14:55.056 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:53.940327+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.4/3.4 MB 37.9 MB/s eta 0:00:00
+2023-02-17 09:14:55.057 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:54.116126+05:30] Collecting charset-normalizer<4,>=2
+2023-02-17 09:14:55.058 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:54.121835+05:30] Downloading
+2023-02-17 09:14:55.059 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:54.121885+05:30] charset_normalizer-3.0.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.wh
+2023-02-17 09:14:55.060 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:54.121891+05:30] l (198 kB)
+2023-02-17 09:14:55.062 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:54.126818+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 198.8/198.8 kB 70.1 MB/s eta 0:00:00
+2023-02-17 09:14:55.063 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:54.169867+05:30] Collecting certifi>=2017.4.17
+2023-02-17 09:14:55.063 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:54.174976+05:30] Downloading certifi-2022.12.7-py3-none-any.whl (155 kB)
+2023-02-17 09:14:55.065 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:54.180247+05:30] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 155.3/155.3 kB 58.4 MB/s eta 0:00:00
+2023-02-17 09:14:56.061 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:54.994044+05:30] Building wheels for collected packages: databricks-cli
+2023-02-17 09:14:56.062 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:54.995362+05:30] Building wheel for databricks-cli (setup.py): started
+2023-02-17 09:14:56.064 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:55.529468+05:30] Building wheel for databricks-cli (setup.py): finished with status 'done'
+2023-02-17 09:14:56.064 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:55.531247+05:30] Created wheel for databricks-cli:
+2023-02-17 09:14:56.065 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:55.531270+05:30] filename=databricks_cli-0.17.4-py3-none-any.whl size=142894
+2023-02-17 09:14:56.066 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:55.531276+05:30] sha256=4d7f8777e4da19289b226f58c20b2ce666f929ee9af52790716fd87b5a19cd97
+2023-02-17 09:14:56.066 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:55.531850+05:30] Stored in directory:
+2023-02-17 09:14:56.074 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:55.531866+05:30] /tmp/pip-ephem-wheel-cache-awb5g4_5/wheels/b3/d4/24/ed7f421c3c600f3eee1a3a9e5c4a
+2023-02-17 09:14:56.074 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:55.531870+05:30] ecc286a7622cac031918b7
+2023-02-17 09:14:56.075 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:55.534792+05:30] Successfully built databricks-cli
+2023-02-17 09:14:57.769 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207665+05:30] Installing collected packages: whylabs-datasketches, pytz, puremagic, monotonic,
+2023-02-17 09:14:57.770 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207691+05:30] coolname, charset-normalizer, zipp, urllib3, typing-extensions, tqdm,
+2023-02-17 09:14:57.773 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207695+05:30] threadpoolctl, tabulate, sqlparse, sniffio, smmap, smart-open, six, pyyaml,
+2023-02-17 09:14:57.777 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207699+05:30] pyrsistent, pyparsing, pyjwt, psutil, protobuf, pillow, oauthlib, numpy,
+2023-02-17 09:14:57.778 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207702+05:30] kiwisolver, joblib, jmespath, idna, h11, fsspec, fonttools, filelock,
+2023-02-17 09:14:57.779 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207706+05:30] entrypoints, cycler, cramjam, cloudpickle, click, certifi, backoff, attrs,
+2023-02-17 09:14:57.780 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207709+05:30] uvicorn, scipy, requests, python-dateutil, pydantic, pyarrow, packaging,
+2023-02-17 09:14:57.781 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207713+05:30] jsonschema, importlib-resources, importlib-metadata, gitdb, contourpy, anyio,
+2023-02-17 09:14:57.782 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207716+05:30] whylabs-client, starlette, scikit-learn, pandas, matplotlib, marshmallow,
+2023-02-17 09:14:57.783 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207719+05:30] GitPython, databricks-cli, botocore, amplitude-tracker, tfy-mlflow-client,
+2023-02-17 09:14:57.954 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:14:56.207724+05:30] s3transfer, fastparquet, fastapi, boto3, whylogs, mlfoundry
+2023-02-17 09:15:23.655 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574581+05:30] Successfully installed GitPython-3.1.31 amplitude-tracker-0.0.7 anyio-3.6.2
+2023-02-17 09:15:23.656 1 task is running: deploy_to_truefoundry (1 running; 0 done).
+2023-02-17 09:15:23.657 No tasks are waiting in the queue.
+2023-02-17 09:15:23.661 end step has not started
+2023-02-17 09:15:23.662 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574611+05:30] attrs-22.2.0 backoff-1.10.0 boto3-1.26.73 botocore-1.29.73 certifi-2022.12.7
+2023-02-17 09:15:23.663 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574623+05:30] charset-normalizer-3.0.1 click-8.1.3 cloudpickle-2.2.1 contourpy-1.0.7
+2023-02-17 09:15:23.664 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574626+05:30] coolname-1.1.0 cramjam-2.6.2 cycler-0.11.0 databricks-cli-0.17.4 entrypoints-0.4
+2023-02-17 09:15:23.665 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574630+05:30] fastapi-0.82.0 fastparquet-0.8.3 filelock-3.9.0 fonttools-4.38.0 fsspec-2023.1.0
+2023-02-17 09:15:23.666 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574633+05:30] gitdb-4.0.10 h11-0.14.0 idna-3.4 importlib-metadata-4.13.0
+2023-02-17 09:15:23.667 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574636+05:30] importlib-resources-5.10.2 jmespath-1.0.1 joblib-1.2.0 jsonschema-4.17.3
+2023-02-17 09:15:23.668 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574642+05:30] kiwisolver-1.4.4 marshmallow-3.19.0 matplotlib-3.7.0 mlfoundry-0.6.1
+2023-02-17 09:15:23.668 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574646+05:30] monotonic-1.6 numpy-1.23.5 oauthlib-3.2.2 packaging-21.3 pandas-1.4.2
+2023-02-17 09:15:23.669 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574649+05:30] pillow-9.4.0 protobuf-4.22.0 psutil-5.9.4 puremagic-1.14 pyarrow-8.0.0
+2023-02-17 09:15:23.849 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574652+05:30] pydantic-1.10.2 pyjwt-2.6.0 pyparsing-3.0.9 pyrsistent-0.19.3
+2023-02-17 09:15:23.850 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574656+05:30] python-dateutil-2.8.2 pytz-2022.7.1 pyyaml-6.0 requests-2.28.2 s3transfer-0.6.0
+2023-02-17 09:15:23.852 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574658+05:30] scikit-learn-1.1.2 scipy-1.10.0 six-1.16.0 smart-open-6.3.0 smmap-5.0.0
+2023-02-17 09:15:23.853 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574660+05:30] sniffio-1.3.0 sqlparse-0.4.3 starlette-0.19.1 tabulate-0.9.0
+2023-02-17 09:15:23.855 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574662+05:30] tfy-mlflow-client-0.0.22 threadpoolctl-3.1.0 tqdm-4.64.1 typing-extensions-4.5.0
+2023-02-17 09:15:23.856 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574665+05:30] urllib3-1.26.14 uvicorn-0.18.3 whylabs-client-0.3.0 whylabs-datasketches-2.2.0b1
+2023-02-17 09:15:23.857 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.574667+05:30] whylogs-0.6.30 zipp-3.13.0
+2023-02-17 09:15:23.858 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.575356+05:30] WARNING: Running pip as the 'root' user can result in broken permissions and
+2023-02-17 09:15:23.859 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.575372+05:30] conflicting behaviour with the system package manager. It is recommended to use
+2023-02-17 09:15:23.860 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.575376+05:30] a virtual environment instead: https://pip.pypa.io/warnings/venv
+2023-02-17 09:15:23.862 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:23.575378+05:30]
+2023-02-17 09:15:40.127 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:39.073010+05:30] ---> 31dd2b2ea094
+2023-02-17 09:15:40.128 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:39.073480+05:30] Step 4/6 : COPY . /app
+2023-02-17 09:15:48.625 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:47.192847+05:30] ---> 97b10c411a27
+2023-02-17 09:15:48.627 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:47.193313+05:30] Step 5/6 : WORKDIR /app
+2023-02-17 09:15:48.627 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:47.211262+05:30] ---> Running in 4ce9e07efda6
+2023-02-17 09:15:55.639 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:55.010600+05:30] ---> 6b0fc95b2ee0
+2023-02-17 09:15:55.641 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:55.011168+05:30] Step 6/6 : ENTRYPOINT uvicorn app:app --port 8080 --host 0.0.0.0
+2023-02-17 09:15:55.646 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:15:55.033545+05:30] ---> Running in 9bb85fa6a4f1
+2023-02-17 09:16:04.156 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:02.813756+05:30] ---> 7610cf69e83b
+2023-02-17 09:16:04.157 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:02.814273+05:30] {'ID':
+2023-02-17 09:16:04.160 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:02.814286+05:30] 'sha256:7610cf69e83b7f5e4955c661f33bf724a3be7fa5ee93245d3b55b6cb4480e967'}
+2023-02-17 09:16:04.161 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:02.814589+05:30] Successfully built 7610cf69e83b
+2023-02-17 09:16:04.162 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:02.818277+05:30] Successfully tagged
+2023-02-17 09:16:04.163 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:02.818292+05:30] 526077812922.dkr.ecr.eu-west-1.amazonaws.com/tfy-demo-cj-metaflow-tf-taxi-rf-ig6
+2023-02-17 09:16:04.165 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:02.818296+05:30] dp:3
+2023-02-17 09:16:04.166 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.694190+05:30] The push refers to repository [526077812922.dkr.ecr.eu-west-1.amazonaws.com/tfy-demo-cj-metaflow-tf-taxi-rf-ig6dp]
+2023-02-17 09:16:04.166 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704688+05:30] cc3f46a17902: Preparing
+2023-02-17 09:16:04.167 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704712+05:30] e23f6bb468a9: Preparing
+2023-02-17 09:16:04.330 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704720+05:30] ddc525d00497: Preparing
+2023-02-17 09:16:04.331 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704726+05:30] 0ae760ada77a: Preparing
+2023-02-17 09:16:04.333 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704732+05:30] 744e8adbdcbc: Preparing
+2023-02-17 09:16:04.334 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704785+05:30] fd5ce4fbb62c: Preparing
+2023-02-17 09:16:04.336 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704798+05:30] 17efc79ac0fe: Preparing
+2023-02-17 09:16:04.338 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704802+05:30] 0b6859e9fff1: Preparing
+2023-02-17 09:16:04.339 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704837+05:30] 11829b3be9c0: Preparing
+2023-02-17 09:16:04.340 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704849+05:30] dc8e1d8b53e9: Preparing
+2023-02-17 09:16:04.340 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704869+05:30] 9d49e0bc68a4: Preparing
+2023-02-17 09:16:04.341 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704873+05:30] 8e396a1aad50: Preparing
+2023-02-17 09:16:04.342 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704896+05:30] 11829b3be9c0: Waiting
+2023-02-17 09:16:04.343 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704900+05:30] 0b6859e9fff1: Waiting
+2023-02-17 09:16:04.344 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704903+05:30] dc8e1d8b53e9: Waiting
+2023-02-17 09:16:04.345 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704931+05:30] 8e396a1aad50: Waiting
+2023-02-17 09:16:04.345 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704940+05:30] fd5ce4fbb62c: Waiting
+2023-02-17 09:16:04.347 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.704966+05:30] 17efc79ac0fe: Waiting
+2023-02-17 09:16:05.149 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.750023+05:30] 0ae760ada77a: Layer already exists
+2023-02-17 09:16:05.151 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.755305+05:30] 744e8adbdcbc: Layer already exists
+2023-02-17 09:16:05.152 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.796939+05:30] fd5ce4fbb62c: Layer already exists
+2023-02-17 09:16:05.154 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.802130+05:30] 17efc79ac0fe: Layer already exists
+2023-02-17 09:16:05.155 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.847385+05:30] 0b6859e9fff1: Layer already exists
+2023-02-17 09:16:05.156 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.883101+05:30] 11829b3be9c0: Layer already exists
+2023-02-17 09:16:05.157 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.923225+05:30] dc8e1d8b53e9: Layer already exists
+2023-02-17 09:16:05.158 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.930283+05:30] 9d49e0bc68a4: Layer already exists
+2023-02-17 09:16:05.159 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:03.965944+05:30] 8e396a1aad50: Layer already exists
+2023-02-17 09:16:05.161 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:04.021985+05:30] cc3f46a17902: Pushed
+2023-02-17 09:16:05.163 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:04.171898+05:30] ddc525d00497: Pushed
+2023-02-17 09:16:38.704 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:37.808673+05:30] e23f6bb468a9: Pushed
+2023-02-17 09:16:38.705 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:38.310680+05:30] 3: digest: sha256:991cbf7dfe700522bbd90a19946de1d5e4a6ee0a9bc33db933a6b3621abb08a6 size: 2847
+2023-02-17 09:16:40.209 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.188089+05:30] The push refers to repository [526077812922.dkr.ecr.eu-west-1.amazonaws.com/tfy-demo-cj-metaflow-tf-taxi-rf-ig6dp]
+2023-02-17 09:16:40.210 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.198768+05:30] cc3f46a17902: Preparing
+2023-02-17 09:16:40.215 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.198790+05:30] e23f6bb468a9: Preparing
+2023-02-17 09:16:40.215 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.198839+05:30] ddc525d00497: Preparing
+2023-02-17 09:16:40.216 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199308+05:30] 0ae760ada77a: Preparing
+2023-02-17 09:16:40.217 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199498+05:30] 744e8adbdcbc: Preparing
+2023-02-17 09:16:40.218 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199638+05:30] fd5ce4fbb62c: Preparing
+2023-02-17 09:16:40.218 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199653+05:30] 17efc79ac0fe: Preparing
+2023-02-17 09:16:40.220 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199658+05:30] 0b6859e9fff1: Preparing
+2023-02-17 09:16:40.222 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199758+05:30] 11829b3be9c0: Preparing
+2023-02-17 09:16:40.224 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199766+05:30] dc8e1d8b53e9: Preparing
+2023-02-17 09:16:40.390 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199769+05:30] 9d49e0bc68a4: Preparing
+2023-02-17 09:16:40.392 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199772+05:30] 8e396a1aad50: Preparing
+2023-02-17 09:16:40.393 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199775+05:30] fd5ce4fbb62c: Waiting
+2023-02-17 09:16:40.398 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199778+05:30] 17efc79ac0fe: Waiting
+2023-02-17 09:16:40.398 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199781+05:30] 0b6859e9fff1: Waiting
+2023-02-17 09:16:40.399 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199784+05:30] 11829b3be9c0: Waiting
+2023-02-17 09:16:40.399 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199788+05:30] dc8e1d8b53e9: Waiting
+2023-02-17 09:16:40.400 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199790+05:30] 9d49e0bc68a4: Waiting
+2023-02-17 09:16:40.401 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.199793+05:30] 8e396a1aad50: Waiting
+2023-02-17 09:16:40.401 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.239388+05:30] ddc525d00497: Layer already exists
+2023-02-17 09:16:40.402 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.239415+05:30] 744e8adbdcbc: Layer already exists
+2023-02-17 09:16:40.403 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.247126+05:30] e23f6bb468a9: Layer already exists
+2023-02-17 09:16:40.404 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.249478+05:30] cc3f46a17902: Layer already exists
+2023-02-17 09:16:40.422 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.253040+05:30] 0ae760ada77a: Layer already exists
+2023-02-17 09:17:08.289 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.269599+05:30] 17efc79ac0fe: Layer already exists
+2023-02-17 09:17:08.291 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.283948+05:30] fd5ce4fbb62c: Layer already exists
+2023-02-17 09:17:08.291 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.286508+05:30] 0b6859e9fff1: Layer already exists
+2023-02-17 09:17:08.295 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.292318+05:30] 11829b3be9c0: Layer already exists
+2023-02-17 09:17:08.296 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.295137+05:30] dc8e1d8b53e9: Layer already exists
+2023-02-17 09:17:08.296 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.297822+05:30] 9d49e0bc68a4: Layer already exists
+2023-02-17 09:17:08.296 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.326693+05:30] 8e396a1aad50: Layer already exists
+2023-02-17 09:17:08.296 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.446732+05:30] latest: digest: sha256:991cbf7dfe700522bbd90a19946de1d5e4a6ee0a9bc33db933a6b3621abb08a6 size: 2847
+2023-02-17 09:17:08.296 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.448536+05:30] [==== Docker logs end ====]
+2023-02-17 09:17:08.296 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.788554+05:30] [==== Docker Image Size:- 1.63GB ====]
+2023-02-17 09:17:08.296 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:16:39.788573+05:30] [Done] Docker image built and pushed
+2023-02-17 09:17:08.297 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:17:07.493933+05:30] [Start] Sending request to url: [REDACTED]"}
+2023-02-17 09:17:38.331 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:17:27.880700+05:30] [Done] Image Built Successfully.
+2023-02-17 09:17:38.332 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] [2023-02-17T09:17:27.880729+05:30] [Done] Kubernetes deployment triggered. It may take 5-10s for the application to be live.
+2023-02-17 09:17:45.372 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:State: 'DEPLOY_SUCCESS'
+2023-02-17 09:17:50.144 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] INFO:servicefoundry:You can find the application on the dashboard:- 'https://app.devtest.truefoundry.tech/applications/cle7ymghp121r1hg941big6dp?tab=deployments'
+2023-02-17 09:17:50.315 [1676605216007443/deploy_to_truefoundry/5 (pid 45000)] Task finished successfully.
+2023-02-17 09:17:50.781 [1676605216007443/end/6 (pid 45074)] Task is starting.
+2023-02-17 09:17:51.203 [1676605216007443/end/6 (pid 45074)] Task finished successfully.
+2023-02-17 09:17:51.205 Done
