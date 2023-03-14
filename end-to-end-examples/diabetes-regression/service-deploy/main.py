@@ -37,7 +37,6 @@ class Response(BaseModel):
 
 # defining a fastapi endpoint for predictions
 @app.post("/predict", response_model=Response)
-# define the path operation function, specifically `predicit` function
 def predict(request: Request):
     features = request.dict()["instances"]
 
