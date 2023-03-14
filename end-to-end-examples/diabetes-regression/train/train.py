@@ -10,29 +10,29 @@ from sklearn.svm import SVR
 from sklearn.metrics import PredictionErrorDisplay
 
 def train(kernel: str, n_quantiles: int):
-    # Load the dataset
+    # load the dataset
     X, y = load_diabetes(as_frame=True, return_X_y=True)
 
-    # NOTE:- You can pass these configurations via command line
+    # NOTE:- you can pass these configurations via command line
     # arguments, config file, environment variables.
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
-    # Initialize the model
+    # initialize the model
     regressor = SVR(kernel=kernel)
 
-    # Fit the model
+    # fit the model
     model = TransformedTargetRegressor(
         regressor=regressor,
         transformer=QuantileTransformer(n_quantiles=n_quantiles, output_distribution="normal"),
     )
     model.fit(X_train, y_train)
 
-    # Get the predictions from the model
+    # get the predictions from the model
     y_pred = model.predict(X_test)
 
-    # Plot the confusion_matrix
+    # plot the confusion_matrix
     PredictionErrorDisplay.from_predictions(
         y_test,
         y_pred,
@@ -40,23 +40,23 @@ def train(kernel: str, n_quantiles: int):
         scatter_kwargs={"alpha": 0.5},
     )
 
-    # Create a run, setting the project's name the following run
+    # create a run, setting the project's name the following run
     # should be associated with via setting the `project_name`
-    # And the name of the run name via `run_name`
+    # and the name of the run name via `run_name`
     run = mlfoundry.get_client().create_run(
         project_name="diabetes-regression", run_name="SVR-with-QT"
     )
 
-    # Log the hyperparameters of the model
+    # log the hyperparameters of the model
     run.log_params(regressor.get_params())
 
-    # Log the metrics of the model
+    # log the metrics of the model
     run.log_metrics({"score": model.score(X_test, y_test)})
 
-    # Log the associated plots
+    # log the associated plots
     run.log_plots({"actual_vs_predicted": plt})
 
-    # Log the model
+    # log the model
     model_version = run.log_model(
         name="diabetes-regression",
         model=model,
@@ -72,18 +72,18 @@ def train(kernel: str, n_quantiles: int):
     )
     print(f"Logged model: {model_version.fqn}")
 
-    # End the run
+    # end the run
     run.end()
 
 
 if __name__ == "__main__":
-    # Setup the argument parser by instantiating `ArgumentParser` class
+    # setup the argument parser by instantiating `ArgumentParser` class
     parser = argparse.ArgumentParser()
-    # Add the following hyperparamters as arguments
+    # add the following hyperparamters as arguments
     parser.add_argument("--kernel", default="linear", type=str)
     parser.add_argument("--n_quantiles", default=100, type=int)
-    #Get the `Namespace` of the arguments
+    # get the `Namespace` of the arguments
     args = parser.parse_args()
 
-    #Run the train function
+    # run the train function
     train(kernel=args.kernel, n_quantiles=args.n_quantiles)
