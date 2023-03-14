@@ -11,7 +11,7 @@ def fetch(session, url):
     except Exception:
         return {}
 
-
+# minimum values and maximum values list that will used below to specify min and max values of features
 mini = [4.600000,0.120000,0.000000,0.900000,0.012000,1.000000,6.000000,0.990070,2.740000,0.330000,8.400000]
 maxi = [15.900000,1.580000,1.000000,15.500000,0.611000,72.000000,289.000000,1.003690,4.010000,2.000000,14.900000]
 
@@ -21,8 +21,13 @@ def main():
     # don't forget the trailing slash
     request_url = os.getenv("INFERENCE_SERVER_URL")
 
+    # set titles and page configs
     st.set_page_config(page_title="Trial", page_icon="🤖")
     st.title("Wine Quality Prediction")
+
+    # create a form using `st.form()` and setup the inputs for the form using `st.slider()`
+    # `st.slider()` will take `features_name`, `min_value`, `max_value`, `step` as arguments
+    # to define the properties of the input slider
     with st.form("my_form"):        
         fixed_acidity = st.slider("Fixed Acidity",min_value=0.0,max_value=16.0,step=0.1,key="fixed_acidity")
         volatile_acidity = st.slider("Volatile Acidity",min_value=0.0,max_value=1.6,step=0.01,key="volatile_acidity")
@@ -36,6 +41,7 @@ def main():
         sulphates = st.slider("Sulphates",min_value=mini[9],max_value=maxi[9],step=0.01)
         alcohol = st.slider("Citric Acid",min_value=mini[10],max_value=maxi[10],step=0.1)
 
+        # Create the features dictionary
         features = [
             {
                 "data id": "string",
@@ -53,9 +59,12 @@ def main():
             }
         ]
 
-
+        # create the submit button
         submitted = st.form_submit_button("Submit")
 
+        # if the form is submitted, we will take the features and post it to our inference service
+        # afterwards if we get the correct data we will display it using `st.metric()`,
+        # if not, we will show error message using `st.error()`
         if submitted:
             r = requests.post(url=urljoin(request_url, "./predict"), json=features)
             print("Status Code:", r.status_code)
