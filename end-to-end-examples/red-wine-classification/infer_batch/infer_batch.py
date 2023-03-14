@@ -23,7 +23,7 @@ def get_input_data(num_samples=random.randint(15, 30)):
     print(f"Fetched {num_samples} random data points")
     return X, y
 
-# Generate the input data
+# generate the input data
 features_list, actuals_list = get_input_data()
 
 print("Running predictions...")
@@ -42,10 +42,10 @@ for prediction, actual in zip(predictions_list, actuals_list):
         continue
     if rand > 0.75:
         value = random.choice(["3", "4", "5", "6", "7", "8"])
-    # Logging the actual values
+    # logging the actual values
     client.log_actuals(
         model_version_fqn=prediction["model_version_fqn"],
-        # Get the actuals in the `mlf.Actual` object
+        # parse the actuals in `mlfoundry.Actual` format
         actuals=[mlf.Actual(data_id=prediction["data_id"], value=actual_value)],
     )
 

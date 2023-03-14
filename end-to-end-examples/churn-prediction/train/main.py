@@ -6,31 +6,31 @@ from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 
 def experiment_track(model, params, metrics, X_train, X_test):
-    # Initialize the mlfoundry client.
+    # initialize the mlfoundry client.
     mlf_api = mlf.get_client()
-    # Create a run
+    # create a run
     mlf_run = mlf_api.create_run(
         project_name="churn-prediction", run_name="churn-train-job"
     )
-    # Log the hyperparameters
+    # log the hyperparameters
     mlf_run.log_params(params)
-    # Log the metrics
+    # log the metrics
     mlf_run.log_metrics(metrics)
-    # Log the train dataset
+    # log the train dataset
     mlf_run.log_dataset("train", X_train)
-    # Log the test dataset
+    # log the test dataset
     mlf_run.log_dataset("test", X_test)
-    # Log the model
+    # log the model
     model_version = mlf_run.log_model(
         name="churn-model",
         model=model,
-        # Specify the framework used (in this case sklearn)
+        # specify the framework used (in this case sklearn)
         framework=mlf.ModelFramework.SKLEARN,
         description="churn-prediction-model",
     )
-    # Log the plots
+    # log the plots
     mlf_run.log_plots({"confusion_matrix": plt}, step=1)
-    # Return the model's fqn
+    # return the model's fqn
     return model_version.fqn
 
 

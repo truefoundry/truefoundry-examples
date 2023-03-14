@@ -41,7 +41,6 @@ def main():
         sulphates = st.slider("Sulphates",min_value=mini[9],max_value=maxi[9],step=0.01)
         alcohol = st.slider("Citric Acid",min_value=mini[10],max_value=maxi[10],step=0.1)
 
-        # Create the features dictionary
         features = [
             {
                 "data id": "string",
