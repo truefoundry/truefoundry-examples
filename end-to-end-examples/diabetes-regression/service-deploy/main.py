@@ -2,20 +2,20 @@ import os
 from typing import List
 import uuid
 from datetime import datetime
-
 import mlfoundry as mlf
 import pandas as pd
 from pydantic import BaseModel
 from fastapi import FastAPI
 
+# instantiate the FastAPI application via `FastAPI`
 app = FastAPI(docs_url="/")
 
-
+# get the model from `Truefoundry Model Registry`
 MODEL_VERSION_FQN = os.environ["MODEL_VERSION_FQN"]
 client = mlf.get_client()
 model = client.get_model(MODEL_VERSION_FQN).load()
 
-
+# define pydantic classes for the Instance, Request and Response
 class Instance(BaseModel):
     age: float
     sex: float
@@ -35,13 +35,16 @@ class Request(BaseModel):
 class Response(BaseModel):
     predictions: List[float]
 
-
+# defining a fastapi endpoint for predictions
 @app.post("/predict", response_model=Response)
 def predict(request: Request):
     features = request.dict()["instances"]
 
+    # create a dataframe out of the features dictionary
     features_df = pd.DataFrame(features)
+    # get the predictions from the model
     predictions = [float(p) for p in model.predict(features_df)]
+    # use the mlfoundry client to log the predictions
     client.log_predictions(
         model_version_fqn=MODEL_VERSION_FQN,
         predictions=[
