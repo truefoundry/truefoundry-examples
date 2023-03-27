@@ -26,7 +26,7 @@ def train(kernel: str, n_quantiles: int):
     model = TransformedTargetRegressor(
         regressor=regressor,
         transformer=QuantileTransformer(n_quantiles=n_quantiles, output_distribution="normal"),
-    )
+    ).fit(X_train, y_train)
     model.fit(X_train, y_train)
 
     # get the predictions from the model
