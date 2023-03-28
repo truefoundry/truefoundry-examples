@@ -33,7 +33,7 @@ y_pred_test = model.predict(X_test)
 
 # logging the data for experiment tracking
 # You can push the model to your choice of storage or model registry.
-run = mlfoundry.get_client().create_run(project_name="red-wine-quality-demo", run_name=f"retrain-{datetime.now().strftime('%m-%d-%Y')}")
+run = mlfoundry.get_client().create_run(ml_flow="red-wine-quality-demo", run_name=f"retrain-{datetime.now().strftime('%m-%d-%Y')}")
 run.log_params(model.get_params())
 run.log_metrics({
     'train/accuracy_score': accuracy_score(y_train, y_pred_train),
