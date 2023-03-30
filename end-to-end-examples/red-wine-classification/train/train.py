@@ -23,7 +23,6 @@ y_pred_train = model.predict(X_train)
 y_pred_test = model.predict(X_test)
 
 # logging the data for experiment tracking
-# you can push the model to your choice of storage or model registry.
 # create a run
 run = mlfoundry.get_client().create_run(project_name="red-wine-quality-demo", run_name=f"train-{datetime.now().strftime('%m-%d-%Y')}")
 # log the hyperparameters
@@ -64,5 +63,5 @@ model_version = run.log_model(
 )
 
 e = time.time()
-print(f"################### Time taken to log models {e-s} ")
+print(f"Time taken to log models {e-s} ")
 print(f"Logged model: {model_version.fqn}")

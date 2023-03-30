@@ -4,7 +4,7 @@ import os
 import requests
 from urllib.parse import urljoin
 
-# get the model deployment url from the environment variables
+# Endpoint of the deployed model
 MODEL_DEPLOYED_URL = os.environ['MODEL_DEPLOYED_URL']
 
 # specifying the desired input components
@@ -19,7 +19,6 @@ inputs = [
     gr.Number(label="EstimatedSalary", value=101348.88)
 ]
 
-# prediction function
 def predict(*val):
     # request body in dictionary format
     json_body = {"parameters": {
@@ -41,12 +40,12 @@ def predict(*val):
         url=urljoin(MODEL_DEPLOYED_URL, "v2/models/churn-model/infer"),
         json=json_body
     )
-    # convert the response into dictionary
+    
     r = resp.json()
     # return the output and model_version
     return [ r["outputs"][0]["data"][0],  r["model_version"]]
 
-# create description for the gradio application
+# description for the gradio application
 desc = f"""## Demo Deployed at {datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")}"""
 
 # setup Gradio Interface
