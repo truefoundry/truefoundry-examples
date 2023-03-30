@@ -1,2 +1,2 @@
 pandas==1.4.4
-mlfoundry>=0.7.2,<0.80
+mlfoundry>=0.7.2,<0.8.0
