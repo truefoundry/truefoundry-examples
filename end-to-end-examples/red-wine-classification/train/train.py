@@ -24,7 +24,7 @@ y_pred_test = model.predict(X_test)
 
 # logging the data for experiment tracking
 # create a run
-run = mlfoundry.get_client().create_run(ml_flow="red-wine-quality-demo", run_name=f"train-{datetime.now().strftime('%m-%d-%Y')}")
+run = mlfoundry.get_client().create_run(ml_repo="red-wine-quality-demo", run_name=f"train-{datetime.now().strftime('%m-%d-%Y')}")
 # log the hyperparameters
 run.log_params(model.get_params())
 # log the metrics

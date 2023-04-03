@@ -114,7 +114,7 @@ class FareRegressionFlow(FlowSpec):
         run_name = datetime.datetime.now().strftime('run-%Y-%m-%d-%H-%M-%S')
         print("Creating run", run_name)
         with client.create_run(
-            ml_flow="cj-metaflow-tf", run_name=run_name
+            ml_repo="cj-metaflow-tf", run_name=run_name
         ) as run:
             run.log_metrics({"model_rmse": self.model_rmse, "baseline_rmse": self.baseline_rmse}, step=0)
             model_version = run.log_model(name="rf_model", model=self.rf_model, framework="sklearn", step=0)

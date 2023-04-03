@@ -10,7 +10,7 @@ def experiment_track(model, params, metrics, X_train, X_test):
     mlf_api = mlf.get_client()
     # create a run
     mlf_run = mlf_api.create_run(
-        ml_flow="churn-prediction", run_name="churn-train-job"
+        ml_repo="churn-prediction", run_name="churn-train-job"
     )
     # log the hyperparameters
     mlf_run.log_params(params)
