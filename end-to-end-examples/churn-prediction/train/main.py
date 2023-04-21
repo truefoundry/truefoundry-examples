@@ -97,11 +97,6 @@ if __name__ == "__main__":
         required=True
     )
     parser.add_argument(
-        "--power",
-        type=int,
-        required=True
-    )
-    parser.add_argument(
         "--dataset_path",
         type=str,
         required=True
