@@ -1,18 +1,23 @@
+env:
+  TFY_API_KEY: <paste api key>
 name: churn-prediction-train
 type: job
-env:
-  TFY_API_KEY: # enter your api key here
 image:
   type: build
   build_spec:
     type: tfy-python-buildpack
     command: >-
       python main.py --n_neighbors {{n_neighbors}} --weights {{weights}}
-      --algorithm {{algorithm}} --power {{power}}
+      --algorithm {{algorithm}} --power {{power}} --dataset_path
+      {{dataset_path}}
     python_version: '3.9'
     build_context_path: ./
   build_source:
     type: local
+mounts:
+  - type: volume
+    mount_path: /tmp/data
+    volume_fqn: tfy-volume://demo-euwe1-production:demos:churn-pred
 params:
   - name: n_neighbors
     default: '5'
@@ -30,9 +35,10 @@ params:
     description: >-
       Power parameter for the Minkowski metric. When p = 1, this is
       manhattan_dist, and euclidean_dist p = 2
-restart: Never
-retries: 1
-timeout: 1000
+  - name: dataset_path
+    default: /tmp/data/Churn_Modelling.csv
+    description: Path to dataset
+retries: 0
 trigger:
   type: manual
 resources:
@@ -42,5 +48,3 @@ resources:
   memory_request: 2000
   ephemeral_storage_limit: 2000
   ephemeral_storage_request: 1000
-failed_jobs_history_limit: 20
-successful_jobs_history_limit: 20

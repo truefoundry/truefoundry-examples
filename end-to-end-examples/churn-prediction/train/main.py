@@ -26,7 +26,13 @@ def experiment_track(model, params, metrics, X_train, X_test):
 
 
 def train_model(hyperparams):
-    df = pd.read_csv("https://raw.githubusercontent.com/nikp1172/datasets-sample/main/Churn_Modelling.csv")
+    try:
+        df = pd.read_csv(
+            hyperparams["dataset_path"]
+        )
+    except e:
+        print(f"Invalid dataset path, file not found on: {hyperparams["dataset_path"]}")
+        df = pd.read_csv("https://raw.githubusercontent.com/nikp1172/datasets-sample/main/Churn_Modelling.csv")
     X = df.iloc[:, 3:-1].drop(["Geography", "Gender"], axis=1)
     y = df.iloc[:, -1]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -67,6 +73,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--power",
         type=int,
+        required=True
+    )
+    parser.add_argument(
+        "--power",
+        type=int,
+        required=True
+    )
+    parser.add_argument(
+        "--dataset_path",
+        type=str,
         required=True
     )
     args = parser.parse_args()
