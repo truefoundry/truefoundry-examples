@@ -24,7 +24,7 @@ pipe.fit(X_train, y_train)
 print(classification_report(y_true=y_test, y_pred=pipe.predict(X_test)))
 
 # You can push model to any storage, here we are using Truefoundry's Model Registry
-run = mlfoundry.get_client().create_run(project_name="iris-classification")
+run = mlfoundry.get_client().create_run(ml_repo="iris-classification")
 model_version = run.log_model(
     name="iris-classifier",
     model=model,
