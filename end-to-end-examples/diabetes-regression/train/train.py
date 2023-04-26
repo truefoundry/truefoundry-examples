@@ -1,5 +1,5 @@
 import argparse
-
+import os
 import matplotlib.pyplot as plt
 import mlfoundry
 from sklearn.datasets import load_diabetes
@@ -44,7 +44,7 @@ def train(kernel: str, n_quantiles: int):
     # should be associated with via setting the `ml_repo`
     # and the name of the run name via `run_name`
     run = mlfoundry.get_client().create_run(
-        ml_repo="diabetes-regression", run_name="SVR-with-QT"
+        ml_repo=os.environ['ML_REPO_NAME'], run_name="SVR-with-QT"
     )
 
     # log the hyperparameters of the model
