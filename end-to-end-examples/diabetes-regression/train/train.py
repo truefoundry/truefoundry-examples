@@ -43,7 +43,7 @@ def train(kernel: str, n_quantiles: int):
     # create a run, setting the project's name the following run
     # should be associated with via setting the `ml_repo`
     # and the name of the run name via `run_name`
-    mlfoundry.get_client()
+    client = mlfoundry.get_client()
     ml_repo = client.create_ml_repo(os.environ['ML_REPO_NAME'])
     run = client.create_run(
         ml_repo=ml_repo.name, run_name="SVR-with-QT"
