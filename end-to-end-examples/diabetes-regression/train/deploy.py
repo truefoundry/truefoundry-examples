@@ -24,7 +24,8 @@ job = Job(
             Param(name="kernel", default='linear', description="kernel for svm"),
         ],
     env={
-        "TFY_API_KEY": os.environ['TFY_API_KEY']
+        "TFY_API_KEY": os.environ['TFY_API_KEY'],
+        "ML_REPO_NAME": os.environ['ML_REPO_NAME']
     }
 )
 deployment = job.deploy(workspace_fqn=args.workspace_fqn)
