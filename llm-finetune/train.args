@@ -1,0 +1,1 @@
+--output_dir model/ --seed 42 --save_strategy no --full_determinism --report_to none
