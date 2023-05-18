@@ -13,9 +13,11 @@ image:
   build_source:
     type: local
 ports:
-  - port: 8000
+  - host: diabetes-reg.demo1.truefoundry.com
+    port: 8000
     expose: true
     protocol: TCP
+    app_protocol: http
 replicas: 1
 resources:
   cpu_limit: 0.5
