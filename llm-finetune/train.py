@@ -1,4 +1,5 @@
 import copy
+import gc
 import json
 from datetime import datetime, timezone
 
@@ -12,7 +13,7 @@ from transformers import pipeline
 # TODO (chiragjn): Add support for other task types
 
 torch.manual_seed(42)
-IGNORE_INDEX = -100  # TODO (chiragjn): Eliminate this magic number?
+IGNORE_INDEX = -100  # TODO (chiragjn): Eliminate this magic number
 
 
 class DatasetBuilder:
@@ -104,13 +105,13 @@ class SequenceDataCollator:
                 self.pad_to_multiple(val, self.tokenizer.pad_token_id)
                 for val in input_ids
             ]
-            labels = [self.pad_to_multiple(val, -100) for val in labels]
+            labels = [self.pad_to_multiple(val, IGNORE_INDEX) for val in labels]
 
         input_ids = torch.nn.utils.rnn.pad_sequence(
             input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
         )
         labels = torch.nn.utils.rnn.pad_sequence(
-            labels, batch_first=True, padding_value=-100
+            labels, batch_first=True, padding_value=IGNORE_INDEX
         )  # -100 tells torch to ignore these tokens in loss computation.
 
         if self.cache_count < 1:
@@ -125,24 +126,52 @@ class SequenceDataCollator:
         )
 
 
-def load_data(path):
+def load_data(path, num_samples: int = -1):
     raw_data = CloudFile(path).get().decode("utf8").split("\n")
     data = []
-    for line in raw_data:
+    n = num_samples if num_samples >= 0 else len(raw_data)
+    for i in range(n):
+        line = raw_data[i]
         try:
             json_object = json.loads(line)
         except json.decoder.JSONDecodeError:
             pass
         else:
             data.append(json_object)
-    return data[:100]
+    return data
+
+
+def save_model(
+        ml_repo: str,
+        model_id: str,
+        training_arguments: TrainingArguments,
+        **kwargs
+):
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    print("Saving Model...")
+    client = mlfoundry.get_client()
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    p = pipeline("text-generation", model=training_arguments.output_dir, tokenizer=training_arguments.output_dir)
+    run = client.create_run(ml_repo=ml_repo, run_name=f"finetune-{ts}")
+    *_, model_name = model_id.rsplit('/', 1)
+    model_name = model_name.replace('.', '-')
+    run.log_model(
+        name=f"{model_name}-{ts}",
+        model=p,
+        framework="transformers",
+        metadata=training_arguments.to_sanitized_dict()
+    )
+    run.end()
 
 
 def train(
         model_id: str,
         train_data: str,
-        ml_repo: str,
         training_arguments: TrainingArguments,
+        num_samples: int = -1,
+        **kwargs
 ):
     print("Loading model...")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
@@ -152,7 +181,7 @@ def train(
         model.resize_token_embeddings(len(tokenizer))
 
     print(f"Loading dataset {train_data}...")
-    train_data = load_data(train_data)
+    train_data = load_data(train_data, num_samples=num_samples)
 
     print("Building dataset...")
     p = CausalDatasetBuilder(tokenizer)
@@ -170,25 +199,10 @@ def train(
         eval_dataset=eval_dataset,
         args=training_arguments,
         data_collator=SequenceDataCollator(tokenizer, 8),  # depends on bf16 value
+        # TODO (chiragjn): Eliminate this magic number 8
     )
     trainer.train()
     trainer.save_model(output_dir=training_arguments.output_dir)
-
-    print("Saving Model...")
-    client = mlfoundry.get_client()
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
-    p = pipeline("text-generation", model=training_arguments.output_dir, tokenizer=training_arguments.output_dir)
-
-    run = client.create_run(ml_repo=ml_repo, run_name=f"finetune-{ts}")
-    *_, model_name = model_id.rsplit('/', 1)
-    model_name = model_name.replace('.', '-')
-    run.log_model(
-        name=f"{model_name}-{ts}",
-        model=p,
-        framework="transformers",
-        metadata=training_arguments.to_sanitized_dict()
-    )
-    run.end()
 
 
 def main():
@@ -205,8 +219,12 @@ def main():
     parser.add_argument(
         "--ml_repo", type=str, required=True, help="ML Repo to put the model to"
     )
+    parser.add_argument(
+        "--num_samples", type=int, default=-1, help="How many samples to use (default: all)"
+    )
     training_arguments, other_args = parser.parse_args_into_dataclasses()
     train(training_arguments=training_arguments, **vars(other_args))
+    save_model(training_arguments=training_arguments, **vars(other_args))
 
 
 if __name__ == "__main__":
