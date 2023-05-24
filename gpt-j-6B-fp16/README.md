@@ -15,7 +15,7 @@ Deploying the example
 1. Install servicefoundry
 
 ```shell
-pip install "servicefoundry>=0.6.7,<0.7.0"
+pip install "servicefoundry>=0.9.0,<0.10.0"
 ```
 
 2. Login
