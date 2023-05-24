@@ -148,29 +148,25 @@ def load_data(path, num_samples: int = -1):
 
 
 def save_model(
-    ml_repo: str, model_id: str, training_arguments: TrainingArguments, **kwargs
+    run: mlfoundry.MlFoundryRun,
+    training_arguments: TrainingArguments,
+    model_name: str,
 ):
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     print("Saving Model...")
-    client = mlfoundry.get_client()
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     p = pipeline(
         "text-generation",
         model=training_arguments.output_dir,
         tokenizer=training_arguments.output_dir,
     )
-    run = client.create_run(ml_repo=ml_repo, run_name=f"finetune-{ts}")
-    *_, model_name = model_id.rsplit("/", 1)
-    model_name = model_name.replace(".", "-")
     run.log_model(
-        name=f"{model_name}-{ts}",
+        name=model_name,
         model=p,
         framework="transformers",
         metadata=training_arguments.to_sanitized_dict(),
     )
-    run.end()
 
 
 def train(
@@ -232,8 +228,19 @@ def main():
         help="How many samples to use (default: all)",
     )
     training_arguments, other_args = parser.parse_args_into_dataclasses()
-    train(training_arguments=training_arguments, **vars(other_args))
-    save_model(training_arguments=training_arguments, **vars(other_args))
+
+    client = mlfoundry.get_client()
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+
+    *_, model_name = other_args.model_id.rsplit("/", 1)
+    model_name = model_name.replace(".", "-")
+    model_name = f"{model_name}-{timestamp}"
+
+    with client.create_run(
+        ml_repo=other_args.ml_repo, run_name=f"finetune-{timestamp}"
+    ) as run:
+        train(training_arguments=training_arguments, **vars(other_args))
+        save_model(run=run, training_arguments=training_arguments, model_name=model_name)
 
 
 if __name__ == "__main__":
