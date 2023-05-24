@@ -2,7 +2,7 @@ import argparse
 import logging
 from servicefoundry import (
         Service, Build, PythonBuild, Port, 
-        Resources, GPU, GPUType 
+        Resources, NodeSelector, NodepoolSelector, GPUType 
 )
 # from servicefoundry import CUDAVersion
 
@@ -29,7 +29,9 @@ service = Service(
              command="bash start.sh"
         ),
     ),
-    ports=[Port(port=8080)],
+    ports=[
+            Port(host="...Provide a value...", port=8080)
+    ],
     resources=Resources(
         cpu_request=3.5,
         cpu_limit=3.5,
@@ -37,7 +39,10 @@ service = Service(
         memory_limit=14500,
         ephemeral_storage_request=50000,
         ephemeral_storage_limit=50000,
-        gpu=GPU(type=GPUType.T4)
+        gpu_count=1,
+        node=NodeSelector(gpu_type=GPUType.T4), 
+        # To use nodepools pass `NodePoolSelector` instead
+        # node=NodePoolSelector(nodepools=["my-nodepool"])
     )
 )
 
