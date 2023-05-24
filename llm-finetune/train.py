@@ -1,4 +1,5 @@
 import copy
+import logging
 import gc
 import json
 from datetime import datetime, timezone
@@ -13,13 +14,33 @@ from transformers import (
     Trainer,
     AutoModelForCausalLM,
     HfArgumentParser,
+    TrainerCallback,
+    pipeline
 )
-from transformers import pipeline
+from transformers.integrations import rewrite_logs
 
 # TODO (chiragjn): Add support for other task types
 
 torch.manual_seed(42)
 IGNORE_INDEX = -100  # TODO (chiragjn): Eliminate this magic number
+
+
+class Callback(TrainerCallback):
+    def __init__(self, run: mlfoundry.MlFoundryRun):
+        self._mlf_run = run
+
+    def on_log(self, args, state, control, logs, model=None, **kwargs):
+        if state.is_world_process_zero:
+            metrics = {}
+            for k, v in logs.items():
+                if isinstance(v, (int, float)):
+                    metrics[k] = v
+                else:
+                    logging.warning(
+                        f'Trainer is attempting to log a value of "{v}" of type {type(v)} for key "{k}" as a metric. '
+                        "MLflow's log_metric() only accepts float and int types so we dropped this attribute."
+                    )
+            self._mlf_run.log_metrics(rewrite_logs(metrics), step=state.global_step)
 
 
 class DatasetBuilder:
@@ -153,6 +174,7 @@ def save_model(
     model_name: str,
 ):
     gc.collect()
+    # return
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     print("Saving Model...")
@@ -170,6 +192,7 @@ def save_model(
 
 
 def train(
+    run: mlfoundry.MlFoundryRun,
     model_id: str,
     train_data: str,
     training_arguments: TrainingArguments,
@@ -204,6 +227,7 @@ def train(
         data_collator=SequenceDataCollator(tokenizer, 8),  # depends on bf16 value
         # TODO (chiragjn): Eliminate this magic number 8
     )
+    trainer.add_callback(Callback(run))
     trainer.train()
     trainer.save_model(output_dir=training_arguments.output_dir)
 
@@ -239,8 +263,10 @@ def main():
     with client.create_run(
         ml_repo=other_args.ml_repo, run_name=f"finetune-{timestamp}"
     ) as run:
-        train(training_arguments=training_arguments, **vars(other_args))
-        save_model(run=run, training_arguments=training_arguments, model_name=model_name)
+        train(run=run, training_arguments=training_arguments, **vars(other_args))
+        save_model(
+            run=run, training_arguments=training_arguments, model_name=model_name
+        )
 
 
 if __name__ == "__main__":
