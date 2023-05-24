@@ -47,6 +47,11 @@ class Callback(TrainerCallback):
         self._mlf_run = run
         self._checkpoint_artifact_name = checkpoint_artifact_name
 
+        if not self._checkpoint_artifact_name:
+            logging.warning(
+                "checkpoint_artifact_name not passed. Checkpoints will not be logged to MLFoundry"
+            )
+
     def on_log(self, args, state, control, logs, model=None, **kwargs):
         if state.is_world_process_zero:
             metrics = {}
