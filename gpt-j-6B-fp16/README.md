@@ -1,5 +1,3 @@
-> Note: GPUs are in preview mode and only available for AWS EKS clusters at the moment. Support for other clouds coming soon
-
 Run GPT-J-6B on Truefoundry with GPUs
 ---
 This example downloads and runs [GPT-J-6B](https://huggingface.co/EleutherAI/gpt-j-6B/tree/float16) model on a single Nvidia T4 GPU and 15 GB RAM in FP16 mode using huggingface `transformers` and `accelerate`
