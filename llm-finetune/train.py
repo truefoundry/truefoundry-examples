@@ -7,7 +7,13 @@ import mlfoundry
 import torch
 from cloudfiles import CloudFile
 from torch.utils.data import Dataset
-from transformers import AutoTokenizer, TrainingArguments, Trainer, AutoModelForCausalLM, HfArgumentParser
+from transformers import (
+    AutoTokenizer,
+    TrainingArguments,
+    Trainer,
+    AutoModelForCausalLM,
+    HfArgumentParser,
+)
 from transformers import pipeline
 
 # TODO (chiragjn): Add support for other task types
@@ -142,10 +148,7 @@ def load_data(path, num_samples: int = -1):
 
 
 def save_model(
-        ml_repo: str,
-        model_id: str,
-        training_arguments: TrainingArguments,
-        **kwargs
+    ml_repo: str, model_id: str, training_arguments: TrainingArguments, **kwargs
 ):
     gc.collect()
     if torch.cuda.is_available():
@@ -153,25 +156,29 @@ def save_model(
     print("Saving Model...")
     client = mlfoundry.get_client()
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
-    p = pipeline("text-generation", model=training_arguments.output_dir, tokenizer=training_arguments.output_dir)
+    p = pipeline(
+        "text-generation",
+        model=training_arguments.output_dir,
+        tokenizer=training_arguments.output_dir,
+    )
     run = client.create_run(ml_repo=ml_repo, run_name=f"finetune-{ts}")
-    *_, model_name = model_id.rsplit('/', 1)
-    model_name = model_name.replace('.', '-')
+    *_, model_name = model_id.rsplit("/", 1)
+    model_name = model_name.replace(".", "-")
     run.log_model(
         name=f"{model_name}-{ts}",
         model=p,
         framework="transformers",
-        metadata=training_arguments.to_sanitized_dict()
+        metadata=training_arguments.to_sanitized_dict(),
     )
     run.end()
 
 
 def train(
-        model_id: str,
-        train_data: str,
-        training_arguments: TrainingArguments,
-        num_samples: int = -1,
-        **kwargs
+    model_id: str,
+    train_data: str,
+    training_arguments: TrainingArguments,
+    num_samples: int = -1,
+    **kwargs,
 ):
     print("Loading model...")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
@@ -207,8 +214,7 @@ def train(
 
 def main():
     parser = HfArgumentParser(
-        TrainingArguments,
-        description="Fine-tune a language model on a text dataset"
+        TrainingArguments, description="Fine-tune a language model on a text dataset"
     )
     parser.add_argument(
         "--model_id", type=str, required=True, help="Huggingface hub model ID"
@@ -220,7 +226,10 @@ def main():
         "--ml_repo", type=str, required=True, help="ML Repo to put the model to"
     )
     parser.add_argument(
-        "--num_samples", type=int, default=-1, help="How many samples to use (default: all)"
+        "--num_samples",
+        type=int,
+        default=-1,
+        help="How many samples to use (default: all)",
     )
     training_arguments, other_args = parser.parse_args_into_dataclasses()
     train(training_arguments=training_arguments, **vars(other_args))
