@@ -1,8 +1,10 @@
 import copy
+import os
 import logging
 import gc
 import json
 from datetime import datetime, timezone
+from typing import Optional
 
 import mlfoundry
 import torch
@@ -15,7 +17,7 @@ from transformers import (
     AutoModelForCausalLM,
     HfArgumentParser,
     TrainerCallback,
-    pipeline
+    pipeline,
 )
 from transformers.integrations import rewrite_logs
 
@@ -26,8 +28,14 @@ IGNORE_INDEX = -100  # TODO (chiragjn): Eliminate this magic number
 
 
 class Callback(TrainerCallback):
-    def __init__(self, run: mlfoundry.MlFoundryRun):
+    def __init__(
+        self, run: mlfoundry.MlFoundryRun, artifact_name: Optional[str] = None
+    ):
         self._mlf_run = run
+        self._artifact_name = artifact_name
+        if not self._artifact_name and os.getenv("TFY_INTERNAL_JOB_RUN_NAME"):
+            job_name = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
+            self._artifact_name = f"checkpoint-{job_name}"
 
     def on_log(self, args, state, control, logs, model=None, **kwargs):
         if state.is_world_process_zero:
@@ -37,10 +45,29 @@ class Callback(TrainerCallback):
                     metrics[k] = v
                 else:
                     logging.warning(
-                        f'Trainer is attempting to log a value of "{v}" of type {type(v)} for key "{k}" as a metric. '
-                        "MLflow's log_metric() only accepts float and int types so we dropped this attribute."
+                        f'Trainer is attempting to log a value of "{v}" of'
+                        f' type {type(v)} for key "{k}" as a metric.'
+                        " MLflow's log_metric() only accepts float and"
+                        " int types so we dropped this attribute."
                     )
             self._mlf_run.log_metrics(rewrite_logs(metrics), step=state.global_step)
+
+    def on_save(self, args, state, control, **kwargs):
+        if state.is_world_process_zero and self._artifact_name:
+            ckpt_dir = f"checkpoint-{state.global_step}"
+            artifact_path = os.path.join(args.output_dir, ckpt_dir)
+            description = None
+            if os.getenv("TFY_INTERNAL_COMPONENT_NAME"):
+                description = (
+                    f"Checkpoint from finetuning job={os.getenv('TFY_INTERNAL_COMPONENT_NAME')}"
+                    f" run={os.getenv('TFY_INTERNAL_JOB_RUN_NAME')}"
+                )
+            self._mlf_run.log_artifact(
+                name=self._artifact_name,
+                artifact_paths=[(artifact_path,)],
+                step=state.global_step,
+                description=description,
+            )
 
 
 class DatasetBuilder:
@@ -197,6 +224,7 @@ def train(
     train_data: str,
     training_arguments: TrainingArguments,
     num_samples: int = -1,
+    checkpoint_artifact_name: Optional[str] = None,
     **kwargs,
 ):
     print("Loading model...")
@@ -227,7 +255,7 @@ def train(
         data_collator=SequenceDataCollator(tokenizer, 8),  # depends on bf16 value
         # TODO (chiragjn): Eliminate this magic number 8
     )
-    trainer.add_callback(Callback(run))
+    trainer.add_callback(Callback(run, artifact_name=checkpoint_artifact_name))
     trainer.train()
     trainer.save_model(output_dir=training_arguments.output_dir)
 
@@ -244,6 +272,15 @@ def main():
     )
     parser.add_argument(
         "--ml_repo", type=str, required=True, help="ML Repo to put the model to"
+    )
+    parser.add_argument(
+        "--checkpoint_artifact_name",
+        type=str,
+        required=False,
+        help=(
+            "ML Repo artifact name to save checkpoints. \n"
+            "The artifact will be created if it does not exist under the give ML Repo"
+        ),
     )
     parser.add_argument(
         "--num_samples",
