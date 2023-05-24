@@ -1,5 +1,3 @@
-> Note: GPUs are in preview mode and only available for AWS EKS clusters at the moment. Support for other clouds coming soon
-
 Run Stable Diffusion v2.1 on Truefoundry with GPUs
 ---
 This example downloads and runs [Stable Diffusion v2.1](https://huggingface.co/stabilityai/stable-diffusion-2-1) model on a single Nvidia T4 GPU and 15 GB RAM in FP16 mode using huggingface `transformers` and `diffusers`
