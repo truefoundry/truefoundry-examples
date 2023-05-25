@@ -1,2 +1,2 @@
---output_dir model/ --log_level debug --do_train --seed 42 --data_seed 42 --save_strategy epoch --save_total_limit 2 --full_determinism --report_to none
+--output_dir model/ --log_level debug --do_train --seed 42 --data_seed 42 --save_strategy epoch --save_total_limit 2 --full_determinism --report_to none --logging_strategy epoch
 
