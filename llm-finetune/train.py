@@ -22,9 +22,10 @@ from transformers import (
 from transformers.integrations import rewrite_logs
 
 # TODO (chiragjn): Add support for other task types
-
+logging.basicConfig(level=logging.INFO)
 torch.manual_seed(42)
 IGNORE_INDEX = -100  # TODO (chiragjn): Eliminate this magic number
+mlfoundry_client = mlfoundry.get_client()
 
 
 def resolve_checkpoint_artifact_name(
@@ -233,6 +234,37 @@ def save_model(
     )
 
 
+def download_last_checkpoint_if_present(
+    run: mlfoundry.MlFoundryRun, checkpoint_artifact_name: str, local_dir: str
+) -> Optional[str]:
+
+    # TODO: update this once we have better API
+    checkpoint_artifact_fqn = (
+        f"artifact:{'/'.join(run.fqn.split('/')[:2])}/{checkpoint_artifact_name}"
+    )
+    try:
+        latest_checkpoint_artifact = next(
+            mlfoundry_client.list_artifact_versions(checkpoint_artifact_fqn)
+        )
+    except StopIteration:
+        logging.info(
+            "No previous checkpoints found at artifact=%r", checkpoint_artifact_fqn
+        )
+        return
+    # TODO: We should have specific exception to identify if the artifact
+    # does not exist
+    except Exception as ex:
+        logging.info("No previous checkpoints found. Message=%s", ex)
+        return
+
+    logging.info(
+        "Downloading last checkpoint from artifact=%r to resume training",
+        checkpoint_artifact_fqn,
+    )
+    os.makedirs(local_dir, exist_ok=True)
+    return latest_checkpoint_artifact.download(local_dir)
+
+
 def train(
     run: mlfoundry.MlFoundryRun,
     model_id: str,
@@ -276,7 +308,19 @@ def train(
     trainer.add_callback(
         Callback(run, checkpoint_artifact_name=checkpoint_artifact_name)
     )
-    trainer.train()
+
+    last_checkpoint_dir = (
+        download_last_checkpoint_if_present(
+            run,
+            checkpoint_artifact_name=checkpoint_artifact_name,
+            local_dir=os.path.join(
+                training_arguments.output_dir, "previous_checkpoint"
+            ),
+        )
+        if checkpoint_artifact_name
+        else None
+    )
+    trainer.train(resume_from_checkpoint=last_checkpoint_dir)
     trainer.save_model(output_dir=training_arguments.output_dir)
 
 
@@ -310,14 +354,13 @@ def main():
     )
     training_arguments, other_args = parser.parse_args_into_dataclasses()
 
-    client = mlfoundry.get_client()
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
 
     *_, model_name = other_args.model_id.rsplit("/", 1)
     model_name = model_name.replace(".", "-")
     model_name = f"{model_name}-{timestamp}"
 
-    with client.create_run(
+    with mlfoundry_client.create_run(
         ml_repo=other_args.ml_repo, run_name=f"finetune-{timestamp}"
     ) as run:
         train(run=run, training_arguments=training_arguments, **vars(other_args))
