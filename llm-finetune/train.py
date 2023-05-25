@@ -5,6 +5,8 @@ import gc
 import json
 from datetime import datetime, timezone
 from typing import Optional
+import tempfile
+import shutil
 
 import mlfoundry
 import torch
@@ -258,11 +260,16 @@ def download_last_checkpoint_if_present(
         return
 
     logging.info(
-        "Downloading last checkpoint from artifact=%r to resume training",
-        checkpoint_artifact_fqn,
+        "Downloading last checkpoint from artifact version=%r step=%r to resume training",
+        latest_checkpoint_artifact.fqn,
+        latest_checkpoint_artifact.step,
     )
     os.makedirs(local_dir, exist_ok=True)
-    return latest_checkpoint_artifact.download(local_dir)
+    local_dir = os.path.join(local_dir, f"checkpoint-{latest_checkpoint_artifact.step}")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        path = latest_checkpoint_artifact.download(temp_dir)
+        shutil.move(path, local_dir)
+    return local_dir
 
 
 def train(
@@ -313,9 +320,7 @@ def train(
         download_last_checkpoint_if_present(
             run,
             checkpoint_artifact_name=checkpoint_artifact_name,
-            local_dir=os.path.join(
-                training_arguments.output_dir, "previous_checkpoint"
-            ),
+            local_dir=training_arguments.output_dir,
         )
         if checkpoint_artifact_name
         else None
