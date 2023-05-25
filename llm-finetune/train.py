@@ -4,7 +4,7 @@ import logging
 import gc
 import json
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Any, Dict
 import tempfile
 import shutil
 
@@ -329,6 +329,19 @@ def train(
     trainer.save_model(output_dir=training_arguments.output_dir)
 
 
+def filter_trainer_args_for_logging(trainer_args: TrainingArguments) -> Dict[str, Any]:
+    return {
+        "num_train_epochs": trainer_args.num_train_epochs,
+        "per_device_train_batch_size": trainer_args.per_device_train_batch_size,
+        "learning_rate": trainer_args.learning_rate,
+        "lr_scheduler_type": trainer_args.lr_scheduler_type,
+        "weight_decay": trainer_args.weight_decay,
+        "max_grad_norm": trainer_args.max_grad_norm,
+        "gradient_accumulation_steps": trainer_args.gradient_accumulation_steps,
+        "warmup_ratio": trainer_args.warmup_ratio,
+    }
+
+
 def main():
     parser = HfArgumentParser(
         TrainingArguments, description="Fine-tune a language model on a text dataset"
@@ -369,6 +382,9 @@ def main():
         ml_repo=other_args.ml_repo, run_name=f"finetune-{timestamp}"
     ) as run:
         run.log_params(other_args, flatten_params=True)
+        run.log_params(
+            filter_trainer_args_for_logging(training_arguments), flatten_params=True
+        )
         # TODO: there are 110 params in training_arguments, we do not need to log all of them.
         # run.log_params(training_arguments.to_sanitized_dict(), flatten_params=True)
         train(run=run, training_arguments=training_arguments, **vars(other_args))
