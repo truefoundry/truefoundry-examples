@@ -368,6 +368,9 @@ def main():
     with mlfoundry_client.create_run(
         ml_repo=other_args.ml_repo, run_name=f"finetune-{timestamp}"
     ) as run:
+        run.log_params(other_args, flatten_params=True)
+        # TODO: there are 110 params in training_arguments, we do not need to log all of them.
+        # run.log_params(training_arguments.to_sanitized_dict(), flatten_params=True)
         train(run=run, training_arguments=training_arguments, **vars(other_args))
         save_model(
             run=run, training_arguments=training_arguments, model_name=model_name
