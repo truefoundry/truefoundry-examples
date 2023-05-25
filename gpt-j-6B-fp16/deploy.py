@@ -30,7 +30,7 @@ service = Service(
         ),
     ),
     ports=[
-            Port(host="...Provide a value...", port=8080)
+        Port(host="...Provide a value...", port=8080)
     ],
     resources=Resources(
         cpu_request=3.5,
