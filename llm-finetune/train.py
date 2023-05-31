@@ -68,8 +68,8 @@ class OtherArguments:
         },
     )
     eval_data: Optional[str] = field(
-        default=None,
-        metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size"},
+        default="NA",
+        metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
     checkpoint_artifact_name: str = field(
         default=None,
@@ -326,7 +326,7 @@ def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArgu
             other_arguments.train_data, max_num_samples=other_arguments.max_num_samples
         )
         eval_data = other_arguments.eval_data
-        if eval_data:
+        if not eval_data or eval_data == "NA":
             logging.info(f"Loading eval dataset {other_arguments.eval_data}...")
             eval_data = load_data(
                 train_data, max_num_samples=other_arguments.max_num_samples
