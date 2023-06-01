@@ -19,7 +19,7 @@ job = Job(
         build_source=LocalSource(local_build=False)
     ),
     env={
-        "TFY_API_KEY": "djE6dHJ1ZWZvdW5kcnk6bmlraGlsOjlkMDcxNw=="
+        "TFY_API_KEY": "paste api key here"
     },
     params=[
         Param(name="n_neighbors", default='5', description="Number of neighbors to use by default"),
