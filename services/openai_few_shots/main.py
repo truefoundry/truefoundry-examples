@@ -12,7 +12,7 @@ class Response(BaseModel):
     answer: str
     tokens_consumed: int
 
-@app.post("/get-ans")
+@app.get("/get-ans")
 def process_text(request_body: RequestBody, compress: bool = False):
     summary = request_body.context
     if compress == True:
