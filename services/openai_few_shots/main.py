@@ -12,4 +12,4 @@ def process_text(context, question, compress: bool = False):
     return answer, tokens_consumed, '$'+ str(tokens_consumed * 	0.000002)
 
 
-gr.Interface(fn=process_text, inputs=[gr.TextArea(label='Context'), gr.Textbox(label='Context'), gr.Checkbox(label='Apply context compression')], outputs=[gr.TextArea(label='Answer'), gr.Text(label='Tokens consumed'), gr.Text(label='Cost incurred')]).launch()
+gr.Interface(fn=process_text, inputs=[gr.TextArea(label='Context'), gr.Textbox(label='Context'), gr.Checkbox(label='Apply context compression')], outputs=[gr.TextArea(label='Answer'), gr.Text(label='Tokens consumed'), gr.Text(label='Cost incurred')]).launch(server_name="0.0.0.0", server_port=8080)
