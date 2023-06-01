@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir fastapi uvicorn pydantic pandas langchain openai
 COPY . .
 
 # Expose the port that the FastAPI application listens on
-EXPOSE 8000
+EXPOSE 8080
 
 # Run the FastAPI application using uvicorn
 CMD ["python", "./main.py"]
