@@ -1,0 +1,2 @@
+mlfoundry==0.8.0
+autogluon==0.7.0
