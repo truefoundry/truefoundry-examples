@@ -326,7 +326,7 @@ def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArgu
             other_arguments.train_data, max_num_samples=other_arguments.max_num_samples
         )
         eval_data = other_arguments.eval_data
-        if not eval_data or eval_data == "NA":
+        if eval_data and eval_data != "NA":
             logging.info(f"Loading eval dataset {other_arguments.eval_data}...")
             eval_data = load_data(
                 train_data, max_num_samples=other_arguments.max_num_samples
