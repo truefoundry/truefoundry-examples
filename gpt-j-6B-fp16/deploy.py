@@ -2,7 +2,7 @@ import argparse
 import logging
 from servicefoundry import (
         Service, Build, PythonBuild, Port, 
-        Resources, GPU, GPUType 
+        Resources, GPU, GPUType , LocalSource
 )
 # from servicefoundry import CUDAVersion
 
@@ -26,10 +26,11 @@ service = Service(
              # but it can be added like following:
              # cuda_version=CUDAVersion.CUDA_11_3_CUDNN8,
              requirements_path="requirements.txt",
-             command="bash start.sh"
+             command="bash start.sh",
         ),
+        build_source=LocalSource(local_build=False)
     ),
-    ports=[Port(port=8080)],
+    ports=[Port(port=8080, host='gptj-6b.demo.truefoundry.com')],
     resources=Resources(
         cpu_request=3.5,
         cpu_limit=3.5,

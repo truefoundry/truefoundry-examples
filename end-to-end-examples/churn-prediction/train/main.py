@@ -1,16 +1,20 @@
 import pandas as pd
 from sklearn.neighbors import KNeighborsClassifier as Classification
 import mlfoundry as mlf
-from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay, f1_score, precision_score, recall_score
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 
 def experiment_track(model, params, metrics, X_train, X_test):
     # initialize the mlfoundry client.
     mlf_api = mlf.get_client()
+
+    # create a ml repo
+
+    mlf_api.create_ml_repo("churn-prediction-rubrik")
     # create a run
     mlf_run = mlf_api.create_run(
-        ml_repo="churn-prediction", run_name="churn-train-job"
+        ml_repo="churn-prediction-rubrik", run_name="churn-train-job"
     )
     # log the hyperparameters
     mlf_run.log_params(params)
@@ -35,20 +39,24 @@ def experiment_track(model, params, metrics, X_train, X_test):
 
 
 def train_model(hyperparams):
-    try:
-        df = pd.read_csv(
-            hyperparams["dataset_path"]
-        )
-    except e:
-        path = hyperparams["dataset_path"]
-        print(f"Invalid dataset path, file not found on: {path}")
-        df = pd.read_csv("https://raw.githubusercontent.com/nikp1172/datasets-sample/main/Churn_Modelling.csv")
+
+    df = pd.read_csv("https://raw.githubusercontent.com/nikp1172/datasets-sample/main/Churn_Modelling.csv")
     X = df.iloc[:, 3:-1].drop(["Geography", "Gender"], axis=1)
     y = df.iloc[:, -1]
     # Create train test split
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
     # Initialize the KNN Classifier
-    classifier = Classification(n_neighbors=hyperparams['n_neighbors'], weights=hyperparams['weights'], algorithm=hyperparams['algorithm'], p=hyperparams['power'])
+    classifier = Classification(
+        n_neighbors=hyperparams['n_neighbors'],
+        weights=hyperparams['weights'],
+        algorithm=hyperparams['algorithm'],
+        p=hyperparams['power'],
+        leaf_size=hyperparams['leaf_size'],
+        metric=hyperparams['metric'],
+        n_jobs=hyperparams['n_jobs']
+    )
+
     # Fit the classifier with the training data
     classifier.fit(X_train, y_train)
     # Get the predictions
@@ -63,7 +71,10 @@ def train_model(hyperparams):
 
     # Get the metrics
     metrics = {
-        "accuracy": accuracy_score(y_test, y_pred)
+        "accuracy": accuracy_score(y_test, y_pred),
+        "f1_score": f1_score(y_test, y_pred, average="weighted"),
+        "precision": precision_score(y_test, y_pred, average="weighted"),
+        "recall": recall_score(y_test, y_pred, average="weighted"),
     }
 
     # Log the experiment
@@ -97,8 +108,18 @@ if __name__ == "__main__":
         required=True
     )
     parser.add_argument(
-        "--dataset_path",
+        "--leaf_size",
+        type=int,
+        required=True
+    )
+    parser.add_argument(
+        "--metric",
         type=str,
+        required=True
+    )
+    parser.add_argument(
+        "--n_jobs",
+        type=int,
         required=True
     )
     args = parser.parse_args()
