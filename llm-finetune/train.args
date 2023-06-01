@@ -1,5 +1,4 @@
 --data_seed 42
---disable_tqdm 1
 --do_eval
 --do_train
 --evaluation_strategy epoch
@@ -7,8 +6,7 @@
 --learning_rate 0.00005
 --load_best_model_at_end
 --log_level debug
---logging_steps 50
---logging_strategy steps
+--logging_strategy epoch
 --lr_scheduler_type linear
 --num_train_epochs 3
 --output_dir model/

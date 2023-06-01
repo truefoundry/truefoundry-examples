@@ -69,7 +69,9 @@ class OtherArguments:
     )
     eval_data: Optional[str] = field(
         default="NA",
-        metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
+        metadata={
+            "help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"
+        },
     )
     checkpoint_artifact_name: str = field(
         default=None,
@@ -136,26 +138,29 @@ class Callback(TrainerCallback):
             )
 
     # noinspection PyMethodOverriding
-    def on_evaluate(self, args, state, control, metrics, **kwargs):
-        # TODO (chiragjn): Hack for now, needs to be moved to `compute_metrics`
-        if "eval_loss" in metrics:
-            try:
-                metrics["eval_perplexity"] = math.exp(metrics["eval_loss"])
-            except OverflowError:
-                metrics["eval_perplexity"] = float("inf")
-
-    # noinspection PyMethodOverriding
     def on_log(self, args, state, control, logs, model=None, **kwargs):
         if state.is_world_process_zero and self._mlf_run:
+            # TODO (chiragjn): Hack for now, needs to be moved to `compute_metrics`
+            #   unfortunately compute metrics does not give us already computed metrics like eval_loss
+            if "eval_loss" in logs:
+                try:
+                    eval_perplexity = math.exp(logs["eval_loss"])
+                except OverflowError:
+                    eval_perplexity = float('inf')
+                    logging.warning(
+                        f"Encountered inf in eval perplexity, cannot log it as a metric"
+                    )
+                logging.info(f"Eval Perplexity: {eval_perplexity}")
+                logs["eval_perplexity"] = eval_perplexity
             metrics = {}
             for k, v in logs.items():
-                if isinstance(v, (int, float, np.integer, np.floating)):
+                if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v):
                     metrics[k] = v
                 else:
                     logging.warning(
                         f'Trainer is attempting to log a value of "{v}" of'
                         f' type {type(v)} for key "{k}" as a metric.'
-                        " Mlfoundry's log_metric() only accepts float and"
+                        " Mlfoundry's log_metric() only accepts finite float and"
                         " int types so we dropped this attribute."
                     )
             self._mlf_run.log_metrics(rewrite_logs(metrics), step=state.global_step)
@@ -173,14 +178,14 @@ class Callback(TrainerCallback):
                 description = (
                     f"Checkpoint from finetuning job={os.getenv('TFY_INTERNAL_COMPONENT_NAME')}"
                     f" run={os.getenv('TFY_INTERNAL_JOB_RUN_NAME')}"
-                )
+                )           
             self._mlf_run.log_artifact(
                 name=self._checkpoint_artifact_name,
                 artifact_paths=[(artifact_path,)],
                 step=state.global_step,
                 description=description,
             )
-
+            
 
 def save_model(
     run: mlfoundry.MlFoundryRun,
@@ -371,18 +376,16 @@ def build_dataset(train_data, eval_data, tokenizer, max_length, training_argumen
 def download_last_checkpoint_if_present(
     run: mlfoundry.MlFoundryRun, checkpoint_artifact_name: str, local_dir: str
 ) -> Optional[str]:
-    # TODO: update this once we have better API
-    checkpoint_artifact_fqn = (
-        f"artifact:{'/'.join(run.fqn.split('/')[:2])}/{checkpoint_artifact_name}"
-    )
     try:
         # TODO (chiragjn): We can use `:latest` tag
         latest_checkpoint_artifact = next(
-            mlfoundry_client.list_artifact_versions(checkpoint_artifact_fqn)
+            mlfoundry_client.list_artifact_versions(
+                ml_repo=run.ml_repo, name=checkpoint_artifact_name
+            )
         )
     except StopIteration:
         logging.info(
-            "No previous checkpoints found at artifact=%r", checkpoint_artifact_fqn
+            f"No previous checkpoints found at artifact={checkpoint_artifact_name!r} in run={run.ml_repo!r}",
         )
         return
     # TODO: We should have specific exception to identify if the artifact
@@ -505,7 +508,7 @@ def train(
 ):
     set_seed(training_arguments.seed)
 
-    if training_arguments.local_rank > 0:
+    if training_arguments.world_size > 1 and training_arguments.local_rank > 0:
         logging.info(
             "Waiting for main process to load data, process it and fetch any checkpoints ..."
         )
@@ -551,7 +554,7 @@ def train(
         training_arguments=training_arguments,
     )
 
-    if training_arguments.local_rank <= 0:
+    if training_arguments.world_size > 1 and training_arguments.local_rank <= 0:
         logging.info("Syncing with main process")
         torch.distributed.barrier()
 
@@ -576,6 +579,9 @@ def train(
         ],
     )
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)
+    
+    if training_arguments.local_rank <= 0:
+        trainer.save_model(output_dir=training_arguments.output_dir)
 
 
 def main():
