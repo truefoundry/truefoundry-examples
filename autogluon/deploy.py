@@ -7,12 +7,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--workspace_fqn", type=str, required=True, help="fqn of the workspace to deploy to"
 )
-parser.add_argument(
-    "--ml_repo",
-    type=str,
-    required=True,
-    help="name of the ml-repo where you want to save the training metadata",
-)
 args = parser.parse_args()
 
 # defining the job specifications
