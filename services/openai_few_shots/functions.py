@@ -1,12 +1,13 @@
 import json
 from constants import FEW_SHOT_SUMMARY_TEMPLATE, GENERATE_ANSWERS_TEMPLATE
 import os
-import tiktoken
 import pandas as pd
 from langchain import PromptTemplate
 from langchain.chains import LLMChain
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.llms import OpenAI
+import openai 
+
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 
 
@@ -46,15 +47,18 @@ def getGeneratedSummary(context):
     generated_summary = generate_summary_from_few_shots(context, model_name='gpt-3.5-turbo')
     return generated_summary
 
+def get_response(prompt):
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": prompt}
+        ]
+
+    )
+    return response
+
 def generate_answers(context, questions):
-    response_obj = {}
-    try:
-        llm = OpenAI(openai_api_key=OPENAI_API_KEY, temperature=0.2, max_tokens=-1)
-        chain = LLMChain(llm=llm, prompt=GENERATE_ANSWERS_PROMPT)
-        response = chain.run(context=context, questions=questions)
-        response_obj = json.loads(response)
-    except Exception as e:
-        print("####", response)
-        print(f"Error happened in generate_answers: {e}")
-        response_obj = {}
-    return response_obj
+    response = get_response(GENERATE_ANSWERS_PROMPT.format(context=context, questions=questions))
+    reply = json.loads(response['choices'][0]['message']['content'])
+    return reply[0]['answer'], response['usage']['total_tokens']
+
