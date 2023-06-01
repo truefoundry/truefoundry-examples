@@ -1,5 +1,5 @@
 import json
-from constants import FEW_SHOT_SUMMARY_TEMPLATE, GENERATE_ANSWERS_TEMPLATE
+from constants import FEW_SHOT_SUMMARY_TEMPLATE, GENERATE_ANSWERS_TEMPLATE, GENERATE_SUMMARY_TEMPLATE
 import os
 import pandas as pd
 from langchain import PromptTemplate
@@ -14,6 +14,11 @@ OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 GENERATE_ANSWERS_PROMPT = PromptTemplate(
     input_variables=["context", "questions"],
     template=GENERATE_ANSWERS_TEMPLATE,
+)
+
+GENERATE_SUMMARY_PROMPT = PromptTemplate(
+    input_variables=["context"],
+    template=GENERATE_SUMMARY_TEMPLATE,
 )
 
 def getGeneratedSummary(context):
@@ -62,3 +67,7 @@ def generate_answers(context, questions):
     reply = json.loads(response['choices'][0]['message']['content'])
     return reply[0]['answer'], response['usage']['total_tokens']
 
+def generate_summary(context):
+    response = get_response(GENERATE_SUMMARY_PROMPT.format(context=context))
+    reply = response['choices'][0]['message']['content']
+    return reply, response['usage']['total_tokens']

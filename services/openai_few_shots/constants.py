@@ -35,3 +35,8 @@ following this format without deviation.
 Context text- {context}
 Here's the set of questions provided as a list of strings- {questions}
 """
+
+GENERATE_SUMMARY_TEMPLATE = """
+Summarize the following context and only return the summary and nothing else:
+{context}
+"""
