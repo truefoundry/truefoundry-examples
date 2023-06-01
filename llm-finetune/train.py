@@ -588,6 +588,8 @@ def main():
         level=logging.INFO,
         format=f"[Rank-{training_arguments.local_rank}] " + logging.BASIC_FORMAT,
     )
+    logging.info(f"Training Arguments: {training_arguments}")
+    logging.info(f"Arguments: {other_arguments}")
     other_arguments.checkpoint_artifact_name = resolve_checkpoint_artifact_name(
         other_arguments.checkpoint_artifact_name
     )
