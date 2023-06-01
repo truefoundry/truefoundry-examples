@@ -5,6 +5,7 @@ FEW_SHOT_SUMMARY_TEMPLATE = """
     1. Ensure that almost no information is lost. If it means you are not able to summarize too much, that's fine too. 
     2. The summary does not have to be grammatically correct. 
     3. The summary does not have to be human readable. 
+    4. The final size of context should not be less than 50 percent of the original size of the context.
 
     Generate a summary which preserves the full meaning but minimizes the number of tokens.  If somebody asks almost any question from the text, the summary should be able to answer as well with the same correctness. 
     Don't give any explanations. As an output, just give the summarized text and don't use keywords like Summary as a prefix. You should just output the final summarized text. Remove new lines. 
