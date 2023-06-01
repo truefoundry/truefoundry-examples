@@ -6,7 +6,7 @@ from langchain import PromptTemplate
 from langchain.chains import LLMChain
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.llms import OpenAI
-os.environ["OPENAI_API_KEY"] = "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"
+OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 
 app = FastAPI()
 
@@ -45,7 +45,7 @@ def getGeneratedSummary(context):
     def generate_summary_from_few_shots(context, model_name='gpt-3.5-turbo'):
         response = ''
         try:
-            llm = OpenAI(openai_api_key=os.environ["OPENAI_API_KEY"], temperature=0.9, 
+            llm = OpenAI(openai_api_key=OPENAI_API_KEY, temperature=0.9, 
                         max_tokens=-1, model_name=model_name)
             chain = LLMChain(llm=llm, prompt=few_shot_prompt)
             response = chain.run(context=context)
@@ -62,3 +62,7 @@ def getGeneratedSummary(context):
 def process_text(text_context: TextContext):
     response = getGeneratedSummary(text_context.text)
     return {"result": response}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)

@@ -5,7 +5,7 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Install the required dependencies
-RUN pip install --no-cache-dir fastapi uvicorn pydantic pandas langchain
+RUN pip install --no-cache-dir fastapi uvicorn pydantic pandas langchain openai
 
 # Copy the application code to the working directory
 COPY . .
@@ -14,4 +14,4 @@ COPY . .
 EXPOSE 8000
 
 # Run the FastAPI application using uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "./main.py"]
