@@ -16,6 +16,7 @@ import torch
 import torch.distributed
 from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
+from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
@@ -30,14 +31,18 @@ from transformers import (
 )
 from transformers.deepspeed import is_deepspeed_zero3_enabled
 from transformers.integrations import rewrite_logs
-from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
+from transformers.utils import (
+    WEIGHTS_NAME,
+    is_torch_bf16_gpu_available,
+    is_torch_tf32_available,
+)
 
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 THIS_DIR = os.path.abspath(os.path.dirname(__name__))
 CACHE_DIR = os.path.join(THIS_DIR, ".cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
-ZERO3_CHECKPOINT_DIR_NAME = "checkpoint-final"
+EXPORT_ZERO3_CHECKPOINT_TO_FP32 = False
 
 mlfoundry_client = mlfoundry.get_client()
 
@@ -171,21 +176,6 @@ def cleanup_checkpoints(
             shutil.rmtree(f_path)
 
 
-def maybe_convert_to_fp32(
-    training_arguments: HFTrainingArguments,
-):
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    # if training_arguments.local_rank == 0:
-    #     zero3_checkpoint_dir = os.path.join(training_arguments.output_dir, ZERO3_CHECKPOINT_DIR_NAME)
-    #     converter_path = os.path.join(zero3_checkpoint_dir, "zero_to_fp32.py")
-    #     if training_arguments.deepspeed and (is_deepspeed_zero3_enabled() or os.path.exists(converter_path)):
-    #         logging.info("Converting ZeRO 3 checkpoint to fp32 ...")
-    #         load_state_dict_from_zero_checkpoint()
-    #
-
-
 def save_model(
     run: mlfoundry.MlFoundryRun,
     training_arguments: HFTrainingArguments,
@@ -271,12 +261,12 @@ class Callback(TrainerCallback):
             description = None
             if TFY_INTERNAL_JOB_NAME:
                 description = f"Checkpoint from finetuning job={TFY_INTERNAL_JOB_NAME} run={TFY_INTERNAL_JOB_RUN_NAME}"
-            # self._mlf_run.log_artifact(
-            #     name=self._checkpoint_artifact_name,
-            #     artifact_paths=[(artifact_path,)],
-            #     step=state.global_step,
-            #     description=description,
-            # )
+            self._mlf_run.log_artifact(
+                name=self._checkpoint_artifact_name,
+                artifact_paths=[(artifact_path,)],
+                step=state.global_step,
+                description=description,
+            )
 
 
 # --- Data Processing Utils ---
@@ -568,14 +558,22 @@ def train(
         logging.info("Syncing all processes")
         torch.distributed.barrier()
 
-    if training_arguments.local_rank <= 0:
-        cleanup_checkpoints(training_arguments=training_arguments)
-
     logging.info("Saving model...")
-    if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
-        checkpoint_dir = os.path.join(training_arguments.output_dir, ZERO3_CHECKPOINT_DIR_NAME)
-        trainer.save_model(output_dir=checkpoint_dir)
+
+    if training_arguments.deepspeed and is_deepspeed_zero3_enabled() and EXPORT_ZERO3_CHECKPOINT_TO_FP32:
+        # TODO (chiragjn): Disabled for now
+        #  Under ZeRO 3, when checkpointing, each rank saves their own part, in zero format
+        #  if "stage3_gather_16bit_weights_on_model_save": true,
+        #  then an additional pytorch_model.bin is saved as a 16-bit checkpoint
+        #  if we want fp32 pytorch_model.bin then we would have to export separately from the checkpoint in zero forma
+        trainer.save_model(output_dir=training_arguments.output_dir)
+        if training_arguments.local_rank <= 0:
+            fp32_weights_path = os.path.join(training_arguments.output_dir, WEIGHTS_NAME)
+            convert_zero_checkpoint_to_fp32_state_dict(trainer.state.best_model_checkpoint, fp32_weights_path)
+            cleanup_checkpoints(training_arguments=training_arguments)
     else:
+        if training_arguments.local_rank <= 0:
+            cleanup_checkpoints(training_arguments=training_arguments)
         trainer.save_model(output_dir=training_arguments.output_dir)
 
     if training_arguments.world_size > 1:
@@ -612,8 +610,7 @@ def main():
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
     if training_arguments.local_rank <= 0:
         assert run is not None
-        # maybe_convert_to_fp32(training_arguments=training_arguments)
-        # save_model(run=run, training_arguments=training_arguments, model_name=model_name)
+        save_model(run=run, training_arguments=training_arguments, model_name=model_name)
 
 
 if __name__ == "__main__":
