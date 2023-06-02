@@ -2,7 +2,7 @@ import argparse
 import logging
 from servicefoundry import (
         Service, Build, PythonBuild, Port, 
-        Resources, NodeSelector, NodepoolSelector, GPUType 
+        Resources, NodeSelector, NodepoolSelector, GPUType, LocalSource
 )
 # from servicefoundry import CUDAVersion
 
@@ -26,8 +26,9 @@ service = Service(
              # but it can be added like following:
              # cuda_version=CUDAVersion.CUDA_11_3_CUDNN8,
              requirements_path="requirements.txt",
-             command="bash start.sh"
+             command="bash start.sh",
         ),
+        build_source=LocalSource(local_build=False)
     ),
     ports=[
         Port(host="...Provide a value...", port=8080)
