@@ -4,7 +4,7 @@
 HF_HOME=/data/hfhome/ deepspeed \
                       --num_gpus 4 \
                       train.py \
-                      --deepspeed ./ds_z2_config.json \
+                      --deepspeed ./1_ds_z2_config.json \
                       --half_precision_backend cuda_amp \
                       --gradient_checkpointing \
                       --model_id EleutherAI/pythia-70m \

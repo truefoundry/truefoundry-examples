@@ -18,6 +18,7 @@ from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
 from sklearn.model_selection import train_test_split
 from transformers import (
+    AutoConfig,
     AutoModelForCausalLM,
     AutoTokenizer,
     HfArgumentParser,
@@ -27,6 +28,7 @@ from transformers import (
     pipeline,
     set_seed,
 )
+from transformers.deepspeed import is_deepspeed_zero3_enabled
 from transformers.integrations import rewrite_logs
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_tf32_available
 
@@ -35,6 +37,7 @@ TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 THIS_DIR = os.path.abspath(os.path.dirname(__name__))
 CACHE_DIR = os.path.join(THIS_DIR, ".cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
+ZERO3_CHECKPOINT_DIR_NAME = "checkpoint-final"
 
 mlfoundry_client = mlfoundry.get_client()
 
@@ -100,6 +103,115 @@ def resolve_checkpoint_artifact_name(
     return None
 
 
+def download_last_checkpoint_if_present(
+    run: mlfoundry.MlFoundryRun, checkpoint_artifact_name: str, local_dir: str
+) -> Optional[str]:
+    try:
+        # TODO (chiragjn): We can use `:latest` tag
+        latest_checkpoint_artifact = next(
+            mlfoundry_client.list_artifact_versions(ml_repo=run.ml_repo, name=checkpoint_artifact_name)
+        )
+    except StopIteration:
+        logging.info(
+            f"No previous checkpoints found at artifact={checkpoint_artifact_name!r} in run={run.ml_repo!r}",
+        )
+        return
+    # TODO: We should have specific exception to identify if the artifact
+    #   does not exist
+    except Exception as ex:
+        logging.info("No previous checkpoints found. Message=%s", ex)
+        return
+
+    logging.info(
+        "Downloading last checkpoint from artifact version=%r step=%r to resume training",
+        latest_checkpoint_artifact.fqn,
+        latest_checkpoint_artifact.step,
+    )
+    os.makedirs(local_dir, exist_ok=True)
+    local_dir = os.path.join(local_dir, f"checkpoint-{latest_checkpoint_artifact.step}")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        path = latest_checkpoint_artifact.download(temp_dir)
+        shutil.move(path, local_dir)
+    return local_dir
+
+
+def get_checkpoint_for_resume_if_any(
+    training_arguments: HFTrainingArguments,
+    run: Optional[mlfoundry.MlFoundryRun],
+    checkpoint_artifact_name: Optional[str] = None,
+) -> Optional[str]:
+    last_checkpoint_info_path = os.path.join(CACHE_DIR, "last_checkpoint_info.json")
+    last_checkpoint_dir = None
+    if training_arguments.local_rank <= 0:
+        logging.info("Checking for any past checkpoints...")
+        assert run is not None
+        if checkpoint_artifact_name:
+            last_checkpoint_dir = download_last_checkpoint_if_present(
+                run,
+                checkpoint_artifact_name=checkpoint_artifact_name,
+                local_dir=training_arguments.output_dir,
+            )
+        with open(last_checkpoint_info_path, "w") as f:
+            last_checkpoint_info = {"last_checkpoint_dir": last_checkpoint_dir}
+            json.dump(last_checkpoint_info, f)
+    else:
+        with open(last_checkpoint_info_path, "r") as f:
+            last_checkpoint_info = json.load(f)
+        last_checkpoint_dir = last_checkpoint_info["last_checkpoint_dir"]
+    return last_checkpoint_dir
+
+
+def cleanup_checkpoints(
+    training_arguments: HFTrainingArguments,
+):
+    logging.info("Cleaning up older checkpoints...")
+    for f in os.listdir(training_arguments.output_dir):
+        f_path = os.path.join(training_arguments.output_dir, f)
+        if os.path.isdir(f_path) and f.startswith("checkpoint-"):
+            shutil.rmtree(f_path)
+
+
+def maybe_convert_to_fp32(
+    training_arguments: HFTrainingArguments,
+):
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    # if training_arguments.local_rank == 0:
+    #     zero3_checkpoint_dir = os.path.join(training_arguments.output_dir, ZERO3_CHECKPOINT_DIR_NAME)
+    #     converter_path = os.path.join(zero3_checkpoint_dir, "zero_to_fp32.py")
+    #     if training_arguments.deepspeed and (is_deepspeed_zero3_enabled() or os.path.exists(converter_path)):
+    #         logging.info("Converting ZeRO 3 checkpoint to fp32 ...")
+    #         load_state_dict_from_zero_checkpoint()
+    #
+
+
+def save_model(
+    run: mlfoundry.MlFoundryRun,
+    training_arguments: HFTrainingArguments,
+    model_name: str,
+):
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    if training_arguments.local_rank == 0:
+        logging.info("Saving Model...")
+        cleanup_checkpoints(training_arguments=training_arguments)
+        p = pipeline(
+            "text-generation",
+            model=training_arguments.output_dir,
+            tokenizer=training_arguments.output_dir,
+            trust_remote_code=True,
+        )
+        run.log_model(
+            name=model_name,
+            model=p,
+            framework="transformers",
+            metadata=training_arguments.to_sanitized_dict(),
+        )
+
+
 def filter_trainer_args_for_logging(trainer_args: TrainingArguments) -> Dict[str, Any]:
     # TODO (chiragjn): Update this list
     return {
@@ -159,36 +271,12 @@ class Callback(TrainerCallback):
             description = None
             if TFY_INTERNAL_JOB_NAME:
                 description = f"Checkpoint from finetuning job={TFY_INTERNAL_JOB_NAME} run={TFY_INTERNAL_JOB_RUN_NAME}"
-            self._mlf_run.log_artifact(
-                name=self._checkpoint_artifact_name,
-                artifact_paths=[(artifact_path,)],
-                step=state.global_step,
-                description=description,
-            )
-
-
-def save_model(
-    run: mlfoundry.MlFoundryRun,
-    training_arguments: TrainingArguments,
-    model_name: str,
-):
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    if training_arguments.local_rank == 0:
-        logging.info("Saving Model...")
-        p = pipeline(
-            "text-generation",
-            model=training_arguments.output_dir,
-            tokenizer=training_arguments.output_dir,
-            trust_remote_code=True,
-        )
-        run.log_model(
-            name=model_name,
-            model=p,
-            framework="transformers",
-            metadata=training_arguments.to_sanitized_dict(),
-        )
+            # self._mlf_run.log_artifact(
+            #     name=self._checkpoint_artifact_name,
+            #     artifact_paths=[(artifact_path,)],
+            #     step=state.global_step,
+            #     description=description,
+            # )
 
 
 # --- Data Processing Utils ---
@@ -316,6 +404,7 @@ def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArgu
 
 
 def build_dataset(train_data, eval_data, tokenizer, max_length, training_arguments):
+    logging.info("Building dataset...")
     dataset_cache_path = os.path.join(CACHE_DIR, "dataset")
     if training_arguments.local_rank <= 0:
         builder = CausalDatasetBuilder(tokenizer=tokenizer, max_length=max_length)
@@ -340,66 +429,9 @@ def build_dataset(train_data, eval_data, tokenizer, max_length, training_argumen
 # --- Core Training Code ---
 
 
-def download_last_checkpoint_if_present(
-    run: mlfoundry.MlFoundryRun, checkpoint_artifact_name: str, local_dir: str
-) -> Optional[str]:
-    try:
-        # TODO (chiragjn): We can use `:latest` tag
-        latest_checkpoint_artifact = next(
-            mlfoundry_client.list_artifact_versions(ml_repo=run.ml_repo, name=checkpoint_artifact_name)
-        )
-    except StopIteration:
-        logging.info(
-            f"No previous checkpoints found at artifact={checkpoint_artifact_name!r} in run={run.ml_repo!r}",
-        )
-        return
-    # TODO: We should have specific exception to identify if the artifact
-    #   does not exist
-    except Exception as ex:
-        logging.info("No previous checkpoints found. Message=%s", ex)
-        return
-
-    logging.info(
-        "Downloading last checkpoint from artifact version=%r step=%r to resume training",
-        latest_checkpoint_artifact.fqn,
-        latest_checkpoint_artifact.step,
-    )
-    os.makedirs(local_dir, exist_ok=True)
-    local_dir = os.path.join(local_dir, f"checkpoint-{latest_checkpoint_artifact.step}")
-    with tempfile.TemporaryDirectory() as temp_dir:
-        path = latest_checkpoint_artifact.download(temp_dir)
-        shutil.move(path, local_dir)
-    return local_dir
-
-
-def get_checkpoint_for_resume_if_any(
-    training_arguments: HFTrainingArguments,
-    run: Optional[mlfoundry.MlFoundryRun],
-    checkpoint_artifact_name: Optional[str] = None,
-) -> Optional[str]:
-    last_checkpoint_info_path = os.path.join(CACHE_DIR, "last_checkpoint_info.json")
-    last_checkpoint_dir = None
-    if training_arguments.local_rank <= 0:
-        logging.info("Checking for any past checkpoints...")
-        assert run is not None
-        if checkpoint_artifact_name:
-            last_checkpoint_dir = download_last_checkpoint_if_present(
-                run,
-                checkpoint_artifact_name=checkpoint_artifact_name,
-                local_dir=training_arguments.output_dir,
-            )
-        with open(last_checkpoint_info_path, "w") as f:
-            last_checkpoint_info = {"last_checkpoint_dir": last_checkpoint_dir}
-            json.dump(last_checkpoint_info, f)
-    else:
-        with open(last_checkpoint_info_path, "r") as f:
-            last_checkpoint_info = json.load(f)
-        last_checkpoint_dir = last_checkpoint_info["last_checkpoint_dir"]
-    return last_checkpoint_dir
-
-
 def get_model(model_source: str, training_arguments: HFTrainingArguments):
     # TODO (chiragjn): Should we pass a torch_dtype here?
+    logging.info("Loading model...")
     model = AutoModelForCausalLM.from_pretrained(
         model_source,
         trust_remote_code=True,
@@ -409,6 +441,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments):
 
 
 def get_tokenizer(model_source: str):
+    logging.info("Loading tokenizer...")
     try:
         # Note: First we try loading with use_fast=False because for some models conversion takes too long
         tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, use_fast=False)
@@ -436,7 +469,8 @@ def get_tokenizer(model_source: str):
     return tokenizer, num_new_tokens
 
 
-def get_max_length(max_length, tokenizer, model):
+def get_max_length(max_length, tokenizer, model_config):
+    logging.info("Resolving max_length for truncation...")
     if max_length is None:
         if tokenizer.model_max_length > int(1e6):
             logging.info(f"tokenizer config does not have proper model_max_length set. Looking at model config")
@@ -445,7 +479,7 @@ def get_max_length(max_length, tokenizer, model):
                 "n_positions",
                 "max_position_embeddings",
             ]:
-                max_length = getattr(model.config, length_setting, None)
+                max_length = getattr(model_config, length_setting, None)
                 if max_length:
                     logging.info(f"Assuming value of {length_setting} from model config as max length: {max_length}")
                     break
@@ -483,21 +517,13 @@ def train(
     else:
         model_source = other_arguments.model_id
 
-    logging.info("Loading model...")
-    model = get_model(model_source, training_arguments=training_arguments)
+    logging.info("Loading config ...")
+    model_config = AutoConfig.from_pretrained(model_source)
 
-    logging.info("Loading tokenizer...")
     tokenizer, num_new_tokens = get_tokenizer(model_source)
 
-    if num_new_tokens > 0:
-        model.resize_token_embeddings(len(tokenizer))
-        # There are some strategies that also assign unk token as pad token
-        # We can also assign the average of all embeddings here for new tokens that got added
+    max_length = get_max_length(max_length=other_arguments.max_length, tokenizer=tokenizer, model_config=model_config)
 
-    logging.info("Resolving max_length for truncation...")
-    max_length = get_max_length(max_length=other_arguments.max_length, tokenizer=tokenizer, model=model)
-
-    logging.info("Building dataset...")
     train_dataset, eval_dataset = build_dataset(
         train_data=train_data,
         eval_data=eval_data,
@@ -507,8 +533,14 @@ def train(
     )
 
     if training_arguments.world_size > 1 and training_arguments.local_rank <= 0:
-        logging.info("Syncing with main process")
+        logging.info("Getting other ranks in sync with main process")
         torch.distributed.barrier()
+
+    model = get_model(model_source, training_arguments=training_arguments)
+    if num_new_tokens > 0:
+        model.resize_token_embeddings(len(tokenizer))
+        # There are some strategies that also assign unk token as pad token
+        # We can also assign the average of all embeddings here for new tokens that got added
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -532,8 +564,23 @@ def train(
     )
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)
 
+    if training_arguments.world_size > 1:
+        logging.info("Syncing all processes")
+        torch.distributed.barrier()
+
     if training_arguments.local_rank <= 0:
+        cleanup_checkpoints(training_arguments=training_arguments)
+
+    logging.info("Saving model...")
+    if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
+        checkpoint_dir = os.path.join(training_arguments.output_dir, ZERO3_CHECKPOINT_DIR_NAME)
+        trainer.save_model(output_dir=checkpoint_dir)
+    else:
         trainer.save_model(output_dir=training_arguments.output_dir)
+
+    if training_arguments.world_size > 1:
+        logging.info("Syncing all processes")
+        torch.distributed.barrier()
 
 
 def main():
@@ -565,7 +612,8 @@ def main():
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
     if training_arguments.local_rank <= 0:
         assert run is not None
-        save_model(run=run, training_arguments=training_arguments, model_name=model_name)
+        # maybe_convert_to_fp32(training_arguments=training_arguments)
+        # save_model(run=run, training_arguments=training_arguments, model_name=model_name)
 
 
 if __name__ == "__main__":
