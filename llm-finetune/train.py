@@ -524,9 +524,10 @@ def train(
     other_arguments: OtherArguments,
     run: Optional[mlfoundry.MlFoundryRun] = None,
 ):
-    if other_arguments.cleanup_output_dir_on_start and os.path.exists(training_arguments.output_dir):
-        logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {training_arguments.output_dir}")
-        shutil.rmtree(training_arguments.output_dir)
+    if training_arguments.local_rank <= 0:
+        if other_arguments.cleanup_output_dir_on_start and os.path.exists(training_arguments.output_dir):
+            logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {training_arguments.output_dir}")
+            shutil.rmtree(training_arguments.output_dir)
 
     set_seed(training_arguments.seed)
 
