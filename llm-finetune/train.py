@@ -458,10 +458,16 @@ def setup(training_arguments: HFTrainingArguments):
 def get_model(model_source: str, training_arguments: HFTrainingArguments):
     # TODO (chiragjn): Should we pass a torch_dtype here?
     logger.info("Loading model...")
+    torch_dtype = None
+    if training_arguments.bf16:
+        torch_dtype = torch.bfloat16
+    elif training_arguments.fp16:
+        torch_dtype = torch.float16
     model = AutoModelForCausalLM.from_pretrained(
         model_source,
         trust_remote_code=True,
         use_cache=False if training_arguments.gradient_checkpointing else True,
+        torch_dtype=torch_dtype,
     )
     return model
 
