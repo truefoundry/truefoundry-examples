@@ -1,4 +1,5 @@
 import copy
+import functools
 import gc
 import json
 import logging
@@ -24,6 +25,7 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     HfArgumentParser,
+    IntervalStrategy,
     Trainer,
     TrainerCallback,
     TrainingArguments,
@@ -59,6 +61,8 @@ class HFTrainingArguments(TrainingArguments):
         if not self.fp16:
             self.bf16 = not self.no_cuda and torch.cuda.is_available() and is_torch_bf16_gpu_available()
             self.tf32 = not self.no_cuda and torch.cuda.is_available() and is_torch_tf32_available()
+        if self.save_strategy == IntervalStrategy.NO:
+            self.load_best_model_at_end = False
         super().__post_init__()
 
 
@@ -100,6 +104,10 @@ class OtherArguments:
     report_to_mlfoundry: bool = field(
         default=True,
         metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
+    )
+    log_checkpoints_to_mlfoundry: bool = field(
+        default=True,
+        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
     )
 
 
@@ -229,9 +237,11 @@ class Callback(TrainerCallback):
         self,
         run: Optional[mlfoundry.MlFoundryRun] = None,
         checkpoint_artifact_name: Optional[str] = None,
+        log_checkpoints_to_mlfoundry: bool = True,
     ):
         self._run = run
         self._checkpoint_artifact_name = checkpoint_artifact_name
+        self._log_checkpoints_to_mlfoundry = log_checkpoints_to_mlfoundry
 
         if not self._checkpoint_artifact_name:
             logger.warning("checkpoint_artifact_name not passed. Checkpoints will not be logged to MLFoundry")
@@ -275,6 +285,9 @@ class Callback(TrainerCallback):
             return
 
         if not self._run or not self._checkpoint_artifact_name:
+            return
+
+        if not self._log_checkpoints_to_mlfoundry:
             return
 
         ckpt_dir = f"checkpoint-{state.global_step}"
@@ -470,6 +483,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments):
         use_cache=False if training_arguments.gradient_checkpointing else True,
         torch_dtype=torch_dtype,
     )
+    model.save_pretrained = functools.partial(model.save_pretrained, max_shard_size="4500MB")
     return model
 
 
@@ -597,6 +611,7 @@ def train(
             Callback(
                 run=run,
                 checkpoint_artifact_name=other_arguments.checkpoint_artifact_name,
+                log_checkpoints_to_mlfoundry=other_arguments.log_checkpoints_to_mlfoundry,
             )
         ],
     )
