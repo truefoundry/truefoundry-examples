@@ -253,6 +253,7 @@ class Callback(TrainerCallback):
                 logger.info(f"{perplexity_key}: {perplexity}")
                 logs[perplexity_key] = perplexity
 
+        logger.info(f"Metrics: {logs}")
         if not self._run:
             return
 
