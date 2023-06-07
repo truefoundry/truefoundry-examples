@@ -403,7 +403,7 @@ def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArgu
         eval_data = other_arguments.eval_data
         if eval_data and eval_data != "NA":
             logger.info(f"Loading eval dataset {other_arguments.eval_data}...")
-            eval_data = load_data(train_data, max_num_samples=other_arguments.max_num_samples)
+            eval_data = load_data(eval_data, max_num_samples=other_arguments.max_num_samples)
         elif other_arguments.eval_size:
             logger.info(f"No eval dataset given, splitting from training dataset...")
             train_data, eval_data = train_test_split(

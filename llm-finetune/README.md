@@ -12,9 +12,8 @@ deepspeed --num_gpus 4 train.py \
           --model_id EleutherAI/pythia-70m \
           --report_to_mlfoundry false \
           --ml_repo transformers \
-          --train_data https://assets.production.truefoundry.com/70k_samples.jsonl \
-          --eval_data NA \
-          --eval_size 0.1 \
+          --train_data https://assets.production.truefoundry.com/standford_alpaca_train_49k.jsonl \
+          --eval_data https://assets.production.truefoundry.com/standford_alpaca_test_2k.jsonl \
           --num_train_epochs 3 \
           --per_device_train_batch_size 4 \
           --per_device_eval_batch_size 4 \
@@ -46,8 +45,8 @@ CUDA_VISIBLE_DEVICES=none python train.py \
                           --model_id EleutherAI/pythia-70m \
                           --report_to_mlfoundry false \
                           --ml_repo transformers \
-                          --train_data https://assets.production.truefoundry.com/70k_samples.jsonl \
-                          --eval_data NA \
+                          --train_data https://assets.production.truefoundry.com/standford_alpaca_train_49k.jsonl \
+                          --eval_data https://assets.production.truefoundry.com/standford_alpaca_test_2k.jsonl \
                           --eval_size 0.1 \
                           --num_train_epochs 3 \
                           --per_device_train_batch_size 4 \
