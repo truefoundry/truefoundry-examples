@@ -253,6 +253,7 @@ class Callback(TrainerCallback):
                 logger.info(f"{perplexity_key}: {perplexity}")
                 logs[perplexity_key] = perplexity
 
+        logger.info(f"Metrics: {logs}")
         if not self._run:
             return
 
@@ -439,20 +440,28 @@ def build_dataset(train_data, eval_data, tokenizer, max_length, training_argumen
 # --- Core Training Code ---
 
 
-def setup(training_arguments: HFTrainingArguments):
+def setup(training_arguments: HFTrainingArguments, start_timestamp: str):
     global logger
+    os.makedirs(training_arguments.output_dir, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
+
+    formatter = logging.Formatter(fmt=f"%(asctime)s [Rank-{training_arguments.local_rank}] %(levelname)s %(message)s")
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(fmt=f"%(asctime)s [Rank-{training_arguments.local_rank}] %(levelname)s %(message)s")
     handler.setFormatter(formatter)
+
+    file_handler = logging.FileHandler(os.path.join(training_arguments.output_dir, f"train-{start_timestamp}.log"))
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
 
     logger.setLevel(logging.DEBUG)
     logger.addHandler(handler)
+    logger.addHandler(file_handler)
 
     hf_logging_utils.disable_default_handler()
     hf_logging_utils.add_handler(handler)
+    hf_logging_utils.add_handler(file_handler)
 
 
 def get_model(model_source: str, training_arguments: HFTrainingArguments):
@@ -642,7 +651,7 @@ def main():
     model_name = "-".join(["finetuned", model_name, timestamp])
     model_name = model_name.replace(".", "-")
 
-    setup(training_arguments=training_arguments)
+    setup(training_arguments=training_arguments, start_timestamp=timestamp)
     logger.info(f"Training Arguments: {training_arguments}")
     logger.info(f"Arguments: {other_arguments}")
 
