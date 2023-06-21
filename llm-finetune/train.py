@@ -590,12 +590,14 @@ def train(
 
     model = get_model(model_source, training_arguments=training_arguments)
     if num_new_tokens > 0:
+        logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
         # There are some strategies that also assign unk token as pad token
         # We can also assign the average of all embeddings here for new tokens that got added
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+        torch.cuda.synchronize()
 
     logger.info("Training...")
     # TODO (chiragjn): Add text generation metrics to `compute_metrics`
