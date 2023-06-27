@@ -1,4 +1,4 @@
 cloud-files==4.15.2
 datasets==2.13.1
-transformers[accelerate,datasets,deepspeed,safetensors,sentencepiece,tokenizers]==4.30.1
+transformers[accelerate,datasets,deepspeed,safetensors,sentencepiece,tokenizers]==4.29.2
 mlfoundry==0.9.0
