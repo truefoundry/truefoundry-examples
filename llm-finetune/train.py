@@ -483,7 +483,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments):
         use_cache=False if training_arguments.gradient_checkpointing else True,
         torch_dtype=torch_dtype,
     )
-    model.save_pretrained = functools.partial(model.save_pretrained, max_shard_size="4500MB")
+    model.save_pretrained = functools.partial(model.save_pretrained, safe_serialization=True)
     return model
 
 
