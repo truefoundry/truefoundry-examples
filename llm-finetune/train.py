@@ -15,10 +15,12 @@ from typing import Any, Dict, Optional
 import mlfoundry
 import numpy as np
 import torch
+import torch.backends.cuda
 import torch.distributed
 from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
+from peft import LoraConfig, get_peft_model
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
@@ -40,6 +42,10 @@ from transformers.utils import (
     is_torch_tf32_available,
 )
 from transformers.utils import logging as hf_logging_utils
+
+# TODO (chiragjn): Add support for text2text-generation
+# TODO (chiragjn): Add support for flash attention - `torch.backends.cuda.sdp_kernel`
+# TODO (chiragjn): Test resume from checkpoint for both full and lora
 
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
@@ -69,8 +75,9 @@ class HFTrainingArguments(TrainingArguments):
 @dataclass
 class OtherArguments:
     model_id: str = field(metadata={"help": "Huggingface hub model ID"})
-    train_data: str = field(metadata={"help": "URL to the jsonl training dataset"})
+    # TODO (chiragjn): Make this optional, because now we have --report_to_mlfoundry
     ml_repo: str = field(metadata={"help": "ML Repo to put the model to"})
+    train_data: str = field(metadata={"help": "URL to the jsonl training dataset"})
     eval_size: Optional[float] = field(
         default=0.1,
         metadata={"help": "Proportion of training data to use as evaluation set. Ignored if `eval_data` is passed"},
@@ -79,12 +86,23 @@ class OtherArguments:
         default="NA",
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
-    checkpoint_artifact_name: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "ML Repo artifact name to save checkpoints. \n"
-            "The artifact will be created if it does not exist under the give ML Repo"
-        },
+    use_lora: bool = field(
+        default=False,
+        metadata={"help": "If to train the model with LoRa"},
+    )
+    #  "c_attn", "down_proj", "gate_proj", "up_proj", "query_key_value" "dense", "dense_h_to_4h", "dense_4h_to_h",
+    lora_config: str = field(
+        default=json.dumps(
+            dict(
+                r=8,
+                lora_alpha=32,
+                target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+                lora_dropout=0.05,
+                bias="none",
+                task_type="CAUSAL_LM",
+            )
+        ),
+        metadata={"help": "Json encoded string containing config for lora training"},
     )
     max_length: Optional[int] = field(
         default=None,
@@ -108,6 +126,13 @@ class OtherArguments:
     log_checkpoints_to_mlfoundry: bool = field(
         default=True,
         metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
+    )
+    checkpoint_artifact_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "ML Repo artifact name to save checkpoints. \n"
+            "The artifact will be created if it does not exist under the give ML Repo"
+        },
     )
 
 
@@ -550,6 +575,9 @@ def train(
             logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {training_arguments.output_dir}")
             shutil.rmtree(training_arguments.output_dir)
 
+    if other_arguments.use_lora:
+        other_arguments.lora_config = LoraConfig(**json.loads(other_arguments.lora_config))
+
     set_seed(training_arguments.seed)
 
     if training_arguments.world_size > 1 and training_arguments.local_rank > 0:
@@ -595,6 +623,19 @@ def train(
         # There are some strategies that also assign unk token as pad token
         # We can also assign the average of all embeddings here for new tokens that got added
 
+    if other_arguments.use_lora:
+        logger.info("Applying peft config ...")
+        other_arguments.lora_config.inference_mode = False
+        model = get_peft_model(model, other_arguments.lora_config)
+        if training_arguments.bf16:
+            model.to(torch.bfloat16)
+        elif training_arguments.fp16:
+            model.to(torch.float16)
+        if training_arguments.gradient_checkpointing:
+            model.enable_input_require_grads()
+
+    model.print_trainable_parameters()
+
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
@@ -639,6 +680,7 @@ def train(
     else:
         if training_arguments.local_rank <= 0:
             cleanup_checkpoints(training_arguments=training_arguments)
+            pass
         trainer.save_model(output_dir=training_arguments.output_dir)
 
     if training_arguments.world_size > 1:
