@@ -1,0 +1,22 @@
+-f https://download.pytorch.org/whl/
+torch==2.0.1+cpu; sys_platform != 'darwin'
+torch==2.0.1; sys_platform == 'darwin'
+chromadb==0.3.26
+duckdb==0.7.1
+hnswlib==0.7.0
+langchain==0.0.218
+pandas==1.5.3
+sentencepiece==0.1.98
+tokenizers==0.13.3
+transformers==4.29.2
+unstructured==0.5.12
+mlfoundry==0.9.0
+requests==2.28.2
+PyMuPDF==1.22.2
+pypdf==3.11.1
+servicefoundry==0.9.9rc1
+requests==2.28.2
+numpy==1.22.4
+sentence-transformers==2.2.2
+nltk==3.6.7
+accelerate==0.20.3
