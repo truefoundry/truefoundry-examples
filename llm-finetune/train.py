@@ -1,5 +1,6 @@
 import copy
 import functools
+import contextlib
 import gc
 import json
 import logging
@@ -79,6 +80,14 @@ class OtherArguments:
         default="NA",
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
+    report_to_mlfoundry: bool = field(
+        default=True,
+        metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
+    )
+    log_checkpoints_to_mlfoundry: bool = field(
+        default=True,
+        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
+    )
     checkpoint_artifact_name: Optional[str] = field(
         default=None,
         metadata={
@@ -101,14 +110,11 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
-    report_to_mlfoundry: bool = field(
-        default=True,
-        metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
+    max_shard_size_in_mb: int = field(
+        default=4500,
+         metadata={"help": "Max shard size in MB when saving model"},
     )
-    log_checkpoints_to_mlfoundry: bool = field(
-        default=True,
-        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
-    )
+    
 
 
 # --- Model checkpointing and logging utils ---
@@ -203,7 +209,7 @@ def log_model_as_pipeline(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     logger.info("Saving Model...")
-    cleanup_checkpoints(training_arguments=training_arguments)
+    # cleanup_checkpoints(training_arguments=training_arguments)
     p = pipeline(
         "text-generation",
         model=training_arguments.output_dir,
@@ -483,7 +489,6 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments):
         use_cache=False if training_arguments.gradient_checkpointing else True,
         torch_dtype=torch_dtype,
     )
-    model.save_pretrained = functools.partial(model.save_pretrained, safe_serialization=True)
     return model
 
 
@@ -589,6 +594,7 @@ def train(
         torch.distributed.barrier()
 
     model = get_model(model_source, training_arguments=training_arguments)
+    model.save_pretrained = functools.partial(model.save_pretrained, max_shard_size=f"{other_arguments.max_shard_size_in_mb}MB")
     if num_new_tokens > 0:
         logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
@@ -638,7 +644,8 @@ def train(
             cleanup_checkpoints(training_arguments=training_arguments)
     else:
         if training_arguments.local_rank <= 0:
-            cleanup_checkpoints(training_arguments=training_arguments)
+            # cleanup_checkpoints(training_arguments=training_arguments)
+            pass
         trainer.save_model(output_dir=training_arguments.output_dir)
 
     if training_arguments.world_size > 1:
