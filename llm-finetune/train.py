@@ -1,6 +1,5 @@
 import copy
 import functools
-import contextlib
 import gc
 import json
 import logging
@@ -110,11 +109,6 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
-    max_shard_size_in_mb: int = field(
-        default=4500,
-         metadata={"help": "Max shard size in MB when saving model"},
-    )
-    
 
 
 # --- Model checkpointing and logging utils ---
@@ -209,7 +203,7 @@ def log_model_as_pipeline(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     logger.info("Saving Model...")
-    # cleanup_checkpoints(training_arguments=training_arguments)
+    cleanup_checkpoints(training_arguments=training_arguments)
     p = pipeline(
         "text-generation",
         model=training_arguments.output_dir,
@@ -399,25 +393,55 @@ class SequenceDataCollator:
         )
 
 
-def load_data(path, max_num_samples: Optional[int] = None):
+def _read_lines_from_files(download_path):
+    for root, dirs, files in os.walk(download_path):
+        for file in files:
+            filepath = os.path.join(root, file)
+            filename = os.path.basename(filepath)
+            if filename.endswith(".jsonl") and not filename.startswith("."):
+                logger.info("Loading from file artifact from mlfoundry")
+                with open(filepath) as f:
+                    for line in f.readlines():
+                        yield line
+
+
+def _read_lines_from_cloudfile(path):
     raw_data = CloudFile(path).get().decode("utf-8").split("\n")
+    for line in raw_data:
+        yield line
+
+
+def load_data(path, max_num_samples: Optional[int] = None):
     data = []
-    n = max_num_samples if max_num_samples else len(raw_data)
-    for i in range(n):
-        line = raw_data[i]
-        try:
-            json_object = json.loads(line)
-        except json.decoder.JSONDecodeError:
-            pass
+    n = max_num_samples if max_num_samples else -1
+    count = 0
+    with tempfile.TemporaryDirectory() as download_dir:
+        if path.startswith("mlfoundry://"):
+            logger.info("Downloading artifact from mlfoundry")
+            client = mlfoundry.get_client()
+            _, artifact_version_fqn = path.split("mlfoundry://", 1)
+            download_path = client.get_artifact(artifact_version_fqn).download(download_dir)
+            lines = _read_lines_from_files(download_path)
         else:
-            data.append(json_object)
+            logger.info(f"Loading data from link: {path}")
+            lines = _read_lines_from_cloudfile(path)
+        for line in lines:
+            if count >= n:
+                break
+            try:
+                json_object = json.loads(line)
+            except json.decoder.JSONDecodeError:
+                pass
+            else:
+                data.append(json_object)
+                count += 1
     return data
 
 
 def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     train_data, eval_data = None, None
     if training_arguments.local_rank <= 0:
-        logger.info(f"Loading train dataset {other_arguments.train_data}...")
+        logger.info(f"Loading train dataset ...")
         train_data = load_data(other_arguments.train_data, max_num_samples=other_arguments.max_num_samples)
         eval_data = other_arguments.eval_data
         if eval_data and eval_data != "NA":
@@ -594,7 +618,6 @@ def train(
         torch.distributed.barrier()
 
     model = get_model(model_source, training_arguments=training_arguments)
-    model.save_pretrained = functools.partial(model.save_pretrained, max_shard_size=f"{other_arguments.max_shard_size_in_mb}MB")
     if num_new_tokens > 0:
         logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
@@ -644,8 +667,7 @@ def train(
             cleanup_checkpoints(training_arguments=training_arguments)
     else:
         if training_arguments.local_rank <= 0:
-            # cleanup_checkpoints(training_arguments=training_arguments)
-            pass
+            cleanup_checkpoints(training_arguments=training_arguments)
         trainer.save_model(output_dir=training_arguments.output_dir)
 
     if training_arguments.world_size > 1:
