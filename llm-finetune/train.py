@@ -1,5 +1,4 @@
 import copy
-import functools
 import gc
 import json
 import logging
@@ -109,6 +108,7 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
+    # TODO (chiragjn): Add option to control max shard size
 
 
 # --- Model checkpointing and logging utils ---
@@ -399,7 +399,7 @@ def _read_lines_from_files(download_path):
             filepath = os.path.join(root, file)
             filename = os.path.basename(filepath)
             if filename.endswith(".jsonl") and not filename.startswith("."):
-                logger.info("Loading from file artifact from mlfoundry")
+                logger.info(f"Loading file {filename} ...")
                 with open(filepath) as f:
                     for line in f.readlines():
                         yield line
@@ -426,7 +426,7 @@ def load_data(path, max_num_samples: Optional[int] = None):
             logger.info(f"Loading data from link: {path}")
             lines = _read_lines_from_cloudfile(path)
         for line in lines:
-            if count >= n:
+            if n > 0 and count >= n:
                 break
             try:
                 json_object = json.loads(line)
@@ -539,7 +539,6 @@ def get_tokenizer(model_source: str):
     if tokenizer.unk_token is None:
         logger.info("UNK token missing, adding a UNK token")
         special_tokens_dict["unk_token"] = DEFAULT_UNK_TOKEN
-    tokenizer.add_special_tokens(special_tokens_dict)
     # TODO (chiragjn): Consider adding fake tokens to vocab to pad to multiple of 64. Can provide better throughput
     num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
     return tokenizer, num_new_tokens
@@ -704,6 +703,8 @@ def main():
         # TODO: there are 110 params in training_arguments, we do not need to log all of them.
         # run.log_params(training_arguments.to_sanitized_dict(), flatten_params=True)
 
+    # TODO (chiragjn): Enabled faster kernels for scaled dot product
+    # with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=True, enable_mem_efficient=True):
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
 
     if training_arguments.local_rank <= 0 and run:
