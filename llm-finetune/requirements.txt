@@ -1,5 +1,5 @@
 cloud-files==4.15.2
 datasets==2.13.1
-git+https://github.com/truefoundry/Deepspeed@b9f7f4578e4b479101f191407d494d5b079fbe62
+deepspeed==0.9.5
 transformers[accelerate,datasets,safetensors,sentencepiece,tokenizers]==4.30.1
 mlfoundry==0.9.0
