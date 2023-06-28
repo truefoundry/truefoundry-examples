@@ -1,5 +1,4 @@
 import copy
-import functools
 import gc
 import json
 import logging
@@ -79,6 +78,14 @@ class OtherArguments:
         default="NA",
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
+    report_to_mlfoundry: bool = field(
+        default=True,
+        metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
+    )
+    log_checkpoints_to_mlfoundry: bool = field(
+        default=True,
+        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
+    )
     checkpoint_artifact_name: Optional[str] = field(
         default=None,
         metadata={
@@ -101,14 +108,7 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
-    report_to_mlfoundry: bool = field(
-        default=True,
-        metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
-    )
-    log_checkpoints_to_mlfoundry: bool = field(
-        default=True,
-        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
-    )
+    # TODO (chiragjn): Add option to control max shard size
 
 
 # --- Model checkpointing and logging utils ---
@@ -393,25 +393,55 @@ class SequenceDataCollator:
         )
 
 
-def load_data(path, max_num_samples: Optional[int] = None):
+def _read_lines_from_files(download_path):
+    for root, dirs, files in os.walk(download_path):
+        for file in files:
+            filepath = os.path.join(root, file)
+            filename = os.path.basename(filepath)
+            if filename.endswith(".jsonl") and not filename.startswith("."):
+                logger.info(f"Loading file {filename} ...")
+                with open(filepath) as f:
+                    for line in f.readlines():
+                        yield line
+
+
+def _read_lines_from_cloudfile(path):
     raw_data = CloudFile(path).get().decode("utf-8").split("\n")
+    for line in raw_data:
+        yield line
+
+
+def load_data(path, max_num_samples: Optional[int] = None):
     data = []
-    n = max_num_samples if max_num_samples else len(raw_data)
-    for i in range(n):
-        line = raw_data[i]
-        try:
-            json_object = json.loads(line)
-        except json.decoder.JSONDecodeError:
-            pass
+    n = max_num_samples if max_num_samples else -1
+    count = 0
+    with tempfile.TemporaryDirectory() as download_dir:
+        if path.startswith("mlfoundry://"):
+            logger.info("Downloading artifact from mlfoundry")
+            client = mlfoundry.get_client()
+            _, artifact_version_fqn = path.split("mlfoundry://", 1)
+            download_path = client.get_artifact(artifact_version_fqn).download(download_dir)
+            lines = _read_lines_from_files(download_path)
         else:
-            data.append(json_object)
+            logger.info(f"Loading data from link: {path}")
+            lines = _read_lines_from_cloudfile(path)
+        for line in lines:
+            if n > 0 and count >= n:
+                break
+            try:
+                json_object = json.loads(line)
+            except json.decoder.JSONDecodeError:
+                pass
+            else:
+                data.append(json_object)
+                count += 1
     return data
 
 
 def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     train_data, eval_data = None, None
     if training_arguments.local_rank <= 0:
-        logger.info(f"Loading train dataset {other_arguments.train_data}...")
+        logger.info(f"Loading train dataset ...")
         train_data = load_data(other_arguments.train_data, max_num_samples=other_arguments.max_num_samples)
         eval_data = other_arguments.eval_data
         if eval_data and eval_data != "NA":
@@ -483,7 +513,6 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments):
         use_cache=False if training_arguments.gradient_checkpointing else True,
         torch_dtype=torch_dtype,
     )
-    model.save_pretrained = functools.partial(model.save_pretrained, max_shard_size="4500MB")
     return model
 
 
@@ -510,7 +539,6 @@ def get_tokenizer(model_source: str):
     if tokenizer.unk_token is None:
         logger.info("UNK token missing, adding a UNK token")
         special_tokens_dict["unk_token"] = DEFAULT_UNK_TOKEN
-    tokenizer.add_special_tokens(special_tokens_dict)
     # TODO (chiragjn): Consider adding fake tokens to vocab to pad to multiple of 64. Can provide better throughput
     num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
     return tokenizer, num_new_tokens
@@ -675,6 +703,8 @@ def main():
         # TODO: there are 110 params in training_arguments, we do not need to log all of them.
         # run.log_params(training_arguments.to_sanitized_dict(), flatten_params=True)
 
+    # TODO (chiragjn): Enabled faster kernels for scaled dot product
+    # with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=True, enable_mem_efficient=True):
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
 
     if training_arguments.local_rank <= 0 and run:
