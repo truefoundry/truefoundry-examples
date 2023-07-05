@@ -15,6 +15,7 @@ import mlfoundry
 import numpy as np
 import torch
 import torch.distributed
+from huggingface_hub import scan_cache_dir
 from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
@@ -198,6 +199,7 @@ def log_model_as_pipeline(
     run: mlfoundry.MlFoundryRun,
     training_arguments: HFTrainingArguments,
     model_name: str,
+    hf_hub_model_id: str
 ):
     gc.collect()
     if torch.cuda.is_available():
@@ -210,11 +212,24 @@ def log_model_as_pipeline(
         tokenizer=training_arguments.output_dir,
         trust_remote_code=True,
     )
+    
+    hf_cache_info = scan_cache_dir()
+    files_to_save = []
+    for repo in hf_cache_info.repos:
+        if repo.repo_id == hf_hub_model_id:
+            for revision in repo.revisions:
+                for file in revision.files:
+                    if file.file_path.name.endswith(".py"):
+                        files_to_save.append(file.file_path)
+                break
     run.log_model(
         name=model_name,
         model=p,
         framework="transformers",
         metadata=training_arguments.to_sanitized_dict(),
+        additional_files=[
+            (str(p) ,"model/pipeline/") for p in files_to_save
+        ]
     )
 
 
@@ -708,7 +723,7 @@ def main():
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
 
     if training_arguments.local_rank <= 0 and run:
-        log_model_as_pipeline(run=run, training_arguments=training_arguments, model_name=model_name)
+        log_model_as_pipeline(run=run, training_arguments=training_arguments, model_name=model_name, hf_hub_model_id=other_arguments.model_id)
         run.end()
 
 
