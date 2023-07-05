@@ -1,3 +1,4 @@
+torch>=2.0.0,<3.0.0
 chromadb==0.3.26
 duckdb==0.7.1
 hnswlib==0.7.0
