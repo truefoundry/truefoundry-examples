@@ -17,6 +17,7 @@ import torch
 import torch.distributed
 from huggingface_hub import scan_cache_dir
 from cloudfiles import CloudFile
+import re
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
 from sklearn.model_selection import train_test_split
@@ -206,12 +207,6 @@ def log_model_as_pipeline(
         torch.cuda.empty_cache()
     logger.info("Saving Model...")
     cleanup_checkpoints(training_arguments=training_arguments)
-    p = pipeline(
-        "text-generation",
-        model=training_arguments.output_dir,
-        tokenizer=training_arguments.output_dir,
-        trust_remote_code=True,
-    )
     
     hf_cache_info = scan_cache_dir()
     files_to_save = []
@@ -222,14 +217,32 @@ def log_model_as_pipeline(
                     if file.file_path.name.endswith(".py"):
                         files_to_save.append(file.file_path)
                 break
+    
+    additional_files = []
+    # copy the files to output_dir of pipeline
+    for file_path in files_to_save:
+        match = re.match(r".*snapshots\/[^\/]+\/(.*)", str(file_path))
+        if match:
+            relative_path = match.group(1)
+            destination_path = os.path.join(training_arguments.output_dir, relative_path)
+            os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+            shutil.copy(str(file_path), destination_path)
+            additional_files.append((destination_path, os.path.join("model", "pipeline", relative_path)))
+        else:
+            logger.warning("Python file in hf model cache in unknown path:", file_path)
+
+    p = pipeline(
+        "text-generation",
+        model=training_arguments.output_dir,
+        tokenizer=training_arguments.output_dir,
+        trust_remote_code=True,
+    )
     run.log_model(
         name=model_name,
         model=p,
         framework="transformers",
         metadata=training_arguments.to_sanitized_dict(),
-        additional_files=[
-            (str(p) ,"model/pipeline/") for p in files_to_save
-        ]
+        additional_files=additional_files,
     )
 
 
