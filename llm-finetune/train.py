@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -18,6 +19,7 @@ import torch.distributed
 from huggingface_hub import scan_cache_dir
 from cloudfiles import CloudFile
 import re
+import evaluate
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
 from sklearn.model_selection import train_test_split
@@ -259,6 +261,12 @@ def filter_trainer_args_for_logging(trainer_args: TrainingArguments) -> Dict[str
         "warmup_ratio": trainer_args.warmup_ratio,
     }
 
+def compute_metrics(pred):
+    """function for custom metrics"""
+    scorer = evaluate.load('rouge')
+    rouge = scorer.compute(predictions=pred.predictions,references=pred.label_ids)
+
+    return {"rouge": rouge}
 
 class Callback(TrainerCallback):
     def __init__(
@@ -662,6 +670,7 @@ def train(
         tokenizer=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
+        compute_metrics=compute_metrics,
         args=training_arguments,
         data_collator=SequenceDataCollator(tokenizer, multiple_of=8),
         # Tensor cores are used when tensor dims are multiple of 8
@@ -673,7 +682,17 @@ def train(
             )
         ],
     )
+    start = time.time()
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)
+    end = time.time
+
+    try:
+        logging_steps = trainer.logging_steps
+        total_tokens = trainer.total_processed_tokens * logging_steps
+        tokens_per_second = (total_tokens / (end - start))
+        run.log_params({"tokens_per_second": tokens_per_second})
+    except Exception as ex:
+        logger.error(f"Was not able to log tokens per second because of error {ex}")
 
     if training_arguments.world_size > 1:
         logger.info("Syncing all processes")
