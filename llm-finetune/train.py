@@ -666,7 +666,7 @@ def train(
     def compute_metrics(eval_pred): 
         """function for custom metrics"""
         predictions, labels = eval_pred
-        predictions = predictions[:, 0]
+        run.log_params({'prediction': predictions, 'labels': labels})
         return {"rogue": calculate_rouge(tokenizer.decode(predictions), tokenizer.decode(labels))}
 
     logger.info("Training...")
