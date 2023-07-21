@@ -20,7 +20,6 @@ from huggingface_hub import scan_cache_dir
 from cloudfiles import CloudFile
 import re
 from rouge_score import rouge_scorer
-import evaluate
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
 from sklearn.model_selection import train_test_split
@@ -263,7 +262,7 @@ def filter_trainer_args_for_logging(trainer_args: TrainingArguments) -> Dict[str
         "warmup_ratio": trainer_args.warmup_ratio,
     }
 
-def calculate_rogue(generated_text, target_text):
+def calculate_rouge(generated_text, target_text):
     scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
     scores = scorer.score(generated_text, target_text)
     return scores['rougeL'].fmeasure
@@ -272,7 +271,7 @@ def compute_metrics(eval_pred):
     """function for custom metrics"""
     predictions, labels = eval_pred
     predictions = predictions[:, 0]
-    return {"rogue": calculate_rogue(predictions, labels)}
+    return {"rogue": calculate_rouge(predictions, labels)}
 
 
 class Callback(TrainerCallback):
