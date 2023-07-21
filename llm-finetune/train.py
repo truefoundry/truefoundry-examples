@@ -19,6 +19,7 @@ import torch.distributed
 from huggingface_hub import scan_cache_dir
 from cloudfiles import CloudFile
 import re
+from rouge_score import rouge_scorer
 import evaluate
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
@@ -261,12 +262,17 @@ def filter_trainer_args_for_logging(trainer_args: TrainingArguments) -> Dict[str
         "warmup_ratio": trainer_args.warmup_ratio,
     }
 
-def compute_metrics(pred):
-    """function for custom metrics"""
-    scorer = evaluate.load('rouge')
-    rouge = scorer.compute(predictions=pred.predictions,references=pred.label_ids)
+def calculate_rogue(generated_text, target_text):
+    scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+    scores = scorer.score(generated_text, target_text)
+    return scores['rougeL'].fmeasure
 
-    return {"rouge": rouge}
+def compute_metrics(eval_pred):
+    """function for custom metrics"""
+    predictions, labels = eval_pred
+    predictions = predictions[:, 0]
+    return {"rogue": calculate_rogue(predictions, labels)}
+
 
 class Callback(TrainerCallback):
     def __init__(
@@ -687,6 +693,8 @@ def train(
     end = time.time
 
     try:
+        eval_results = trainer.evaluate()
+        run.log_params({'rouge_result':eval_results["eval_rogue"]})
         logging_steps = trainer.logging_steps
         total_tokens = trainer.total_processed_tokens * logging_steps
         tokens_per_second = (total_tokens / (end - start))
