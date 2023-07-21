@@ -57,6 +57,7 @@ DEFAULT_EOS_TOKEN = "</s>"
 DEFAULT_BOS_TOKEN = "<s>"
 DEFAULT_UNK_TOKEN = "<unk>"
 
+torch.cuda.empty_cache()
 
 @dataclass
 class HFTrainingArguments(TrainingArguments):
