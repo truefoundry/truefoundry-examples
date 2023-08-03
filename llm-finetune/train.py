@@ -1,6 +1,5 @@
 import pdb
 import copy
-import functools
 import gc
 import json
 import logging
@@ -18,7 +17,9 @@ import numpy as np
 import torch
 import torch.backends.cuda
 import torch.distributed
+from huggingface_hub import scan_cache_dir
 from cloudfiles import CloudFile
+import re
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
 from trl import SFTTrainer
@@ -88,6 +89,22 @@ class OtherArguments:
         default="NA",
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
+    report_to_mlfoundry: bool = field(
+        default=True,
+        metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
+    )
+    log_checkpoints_to_mlfoundry: bool = field(
+        default=True,
+        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
+    )
+    # TODO (chiragjn): Add option to control max shard size
+    checkpoint_artifact_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "ML Repo artifact name to save checkpoints. \n"
+            "The artifact will be created if it does not exist under the give ML Repo"
+        },
+    )
     use_lora: bool = field(
         default=False,
         metadata={"help": "If to train the model with LoRa"},
@@ -121,21 +138,7 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
-    report_to_mlfoundry: bool = field(
-        default=True,
-        metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
-    )
-    log_checkpoints_to_mlfoundry: bool = field(
-        default=True,
-        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
-    )
-    checkpoint_artifact_name: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "ML Repo artifact name to save checkpoints. \n"
-            "The artifact will be created if it does not exist under the give ML Repo"
-        },
-    )
+    
 
 
 # --- Model checkpointing and logging utils ---
@@ -225,12 +228,37 @@ def log_model_as_pipeline(
     run: mlfoundry.MlFoundryRun,
     training_arguments: HFTrainingArguments,
     model_name: str,
+    hf_hub_model_id: str
 ):
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     logger.info("Saving Model...")
     cleanup_checkpoints(training_arguments=training_arguments)
+    
+    hf_cache_info = scan_cache_dir()
+    files_to_save = []
+    for repo in hf_cache_info.repos:
+        if repo.repo_id == hf_hub_model_id:
+            for revision in repo.revisions:
+                for file in revision.files:
+                    if file.file_path.name.endswith(".py"):
+                        files_to_save.append(file.file_path)
+                break
+    
+    additional_files = []
+    # copy the files to output_dir of pipeline
+    for file_path in files_to_save:
+        match = re.match(r".*snapshots\/[^\/]+\/(.*)", str(file_path))
+        if match:
+            relative_path = match.group(1)
+            destination_path = os.path.join(training_arguments.output_dir, relative_path)
+            os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+            shutil.copy(str(file_path), destination_path)
+            additional_files.append((destination_path, os.path.join("model", "pipeline", relative_path)))
+        else:
+            logger.warning("Python file in hf model cache in unknown path:", file_path)
+
     p = pipeline(
         "text-generation",
         model=training_arguments.output_dir,
@@ -242,6 +270,7 @@ def log_model_as_pipeline(
         model=p,
         framework="transformers",
         metadata=training_arguments.to_sanitized_dict(),
+        additional_files=additional_files,
     )
 
 
@@ -420,25 +449,55 @@ class SequenceDataCollator:
         )
 
 
-def load_data(path, max_num_samples: Optional[int] = None):
+def _read_lines_from_files(download_path):
+    for root, dirs, files in os.walk(download_path):
+        for file in files:
+            filepath = os.path.join(root, file)
+            filename = os.path.basename(filepath)
+            if filename.endswith(".jsonl") and not filename.startswith("."):
+                logger.info(f"Loading file {filename} ...")
+                with open(filepath) as f:
+                    for line in f.readlines():
+                        yield line
+
+
+def _read_lines_from_cloudfile(path):
     raw_data = CloudFile(path).get().decode("utf-8").split("\n")
+    for line in raw_data:
+        yield line
+
+
+def load_data(path, max_num_samples: Optional[int] = None):
     data = []
-    n = max_num_samples if max_num_samples else len(raw_data)
-    for i in range(n):
-        line = raw_data[i]
-        try:
-            json_object = json.loads(line)
-        except json.decoder.JSONDecodeError:
-            pass
+    n = max_num_samples if max_num_samples else -1
+    count = 0
+    with tempfile.TemporaryDirectory() as download_dir:
+        if path.startswith("mlfoundry://"):
+            logger.info("Downloading artifact from mlfoundry")
+            client = mlfoundry.get_client()
+            _, artifact_version_fqn = path.split("mlfoundry://", 1)
+            download_path = client.get_artifact(artifact_version_fqn).download(download_dir)
+            lines = _read_lines_from_files(download_path)
         else:
-            data.append(json_object)
+            logger.info(f"Loading data from link: {path}")
+            lines = _read_lines_from_cloudfile(path)
+        for line in lines:
+            if n > 0 and count >= n:
+                break
+            try:
+                json_object = json.loads(line)
+            except json.decoder.JSONDecodeError:
+                pass
+            else:
+                data.append(json_object)
+                count += 1
     return data
 
 
 def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     train_data, eval_data = None, None
     if training_arguments.local_rank <= 0:
-        logger.info(f"Loading train dataset {other_arguments.train_data}...")
+        logger.info(f"Loading train dataset ...")
         train_data = load_data(other_arguments.train_data, max_num_samples=other_arguments.max_num_samples)
         eval_data = other_arguments.eval_data
         if eval_data and eval_data != "NA":
@@ -515,8 +574,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments):
         use_cache=False if training_arguments.gradient_checkpointing else True,
         torch_dtype=get_torch_dtype(training_arguments),
     )
-    if training_arguments.gradient_checkpointing:
-        model.config.use_cache = False 
+    model.save_pretrained = functools.partial(model.save_pretrained, max_shard_size="4500MB")
     return model
 
 
@@ -543,7 +601,6 @@ def get_tokenizer(model_source: str):
     if tokenizer.unk_token is None:
         logger.info("UNK token missing, adding a UNK token")
         special_tokens_dict["unk_token"] = DEFAULT_UNK_TOKEN
-    tokenizer.add_special_tokens(special_tokens_dict)
     # TODO (chiragjn): Consider adding fake tokens to vocab to pad to multiple of 64. Can provide better throughput
     num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
     return tokenizer, num_new_tokens
@@ -738,10 +795,12 @@ def main():
         # TODO: there are 110 params in training_arguments, we do not need to log all of them.
         # run.log_params(training_arguments.to_sanitized_dict(), flatten_params=True)
 
+    # TODO (chiragjn): Enabled faster kernels for scaled dot product
+    # with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=True, enable_mem_efficient=True):
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
 
     if training_arguments.local_rank <= 0 and run:
-        log_model_as_pipeline(run=run, training_arguments=training_arguments, model_name=model_name)
+        log_model_as_pipeline(run=run, training_arguments=training_arguments, model_name=model_name, hf_hub_model_id=other_arguments.model_id)
         run.end()
 
 
