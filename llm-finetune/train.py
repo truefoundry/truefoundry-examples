@@ -1,3 +1,4 @@
+import pdb
 import copy
 import functools
 import gc
@@ -20,7 +21,8 @@ import torch.distributed
 from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
-from peft import LoraConfig, get_peft_model
+from trl import SFTTrainer
+from peft import LoraConfig, get_peft_model, AutoPeftModelForCausalLM
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
@@ -494,21 +496,27 @@ def setup(training_arguments: HFTrainingArguments):
     hf_logging_utils.add_handler(handler)
 
 
-def get_model(model_source: str, training_arguments: HFTrainingArguments):
-    # TODO (chiragjn): Should we pass a torch_dtype here?
-    logger.info("Loading model...")
+
+def get_torch_dtype(training_arguments: HFTrainingArguments):
     torch_dtype = None
     if training_arguments.bf16:
         torch_dtype = torch.bfloat16
     elif training_arguments.fp16:
         torch_dtype = torch.float16
+    return torch_dtype
+
+
+def get_model(model_source: str, training_arguments: HFTrainingArguments):
+    # TODO (chiragjn): Should we pass a torch_dtype here?
+    logger.info("Loading model...")
     model = AutoModelForCausalLM.from_pretrained(
         model_source,
         trust_remote_code=True,
         use_cache=False if training_arguments.gradient_checkpointing else True,
-        torch_dtype=torch_dtype,
+        torch_dtype=get_torch_dtype(training_arguments),
     )
-    model.save_pretrained = functools.partial(model.save_pretrained, max_shard_size="4500MB")
+    if training_arguments.gradient_checkpointing:
+        model.config.use_cache = False 
     return model
 
 
@@ -635,7 +643,7 @@ def train(
             model.enable_input_require_grads()
 
     model.print_trainable_parameters()
-
+    
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
@@ -680,13 +688,26 @@ def train(
     else:
         if training_arguments.local_rank <= 0:
             cleanup_checkpoints(training_arguments=training_arguments)
-            pass
         trainer.save_model(output_dir=training_arguments.output_dir)
 
     if training_arguments.world_size > 1:
         logger.info("Syncing all processes")
         torch.distributed.barrier()
 
+    if other_arguments.use_lora:
+        if training_arguments.local_rank <= 0:
+            logger.info("Merging lora adapter into main model")
+            model = AutoPeftModelForCausalLM.from_pretrained(
+                training_arguments.output_dir, 
+                low_cpu_mem_usage=True,
+                torch_dtype=get_torch_dtype(training_arguments),
+            )
+            model = model.merge_and_unload()
+            model.save_pretrained(training_arguments.output_dir, safe_serialization=True)
+            for filename in ["adapter_config.json", "adapter_model.safetensors", "adapter_model.bin"]:
+                file_to_delete = os.path.join(training_arguments.output_dir, filename)
+                if os.path.exists(file_to_delete):
+                    os.remove(file_to_delete)
 
 def main():
     parser = HfArgumentParser(
