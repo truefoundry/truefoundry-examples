@@ -7,7 +7,7 @@ deepspeed --num_gpus 1 train.py \
           --output_dir ./model \
           --cleanup_output_dir_on_start \
           --max_num_samples 10 \
-          --deepspeed ./1_ds_z2_config.json \
+          --deepspeed ./1_ds_z1_config.json \
           --half_precision_backend cuda_amp \
           --model_id EleutherAI/pythia-70m \
           --report_to_mlfoundry false \
