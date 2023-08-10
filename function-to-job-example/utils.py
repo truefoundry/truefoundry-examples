@@ -11,11 +11,11 @@ class Params(BaseModel):
     name: str
     default: str
 
-class GenerateParams(BaseModel):
+class GeneratedParams(BaseModel):
     params: List[Params]
     command_argument: str
 
-def generate_params(callable) -> GenerateParams:
+def generate_params(callable) -> GeneratedParams:
     params_list = []
     command_argument = ""
 
@@ -40,4 +40,4 @@ def generate_params(callable) -> GenerateParams:
 
     command_argument = " ".join(f"--{param_info['name']} {{{{{param_info['name']}}}}}" for param_info in params_list)
   
-    return GenerateParams(params=params, command_argument=command_argument)
+    return GeneratedParams(params=params, command_argument=command_argument)
