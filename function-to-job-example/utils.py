@@ -1,28 +1,43 @@
 import inspect
-from typing import Dict, List
-
+import argparse
+import logging
+from typing import List
 from servicefoundry import Param
+from pydantic import BaseModel
 
+logging.basicConfig(level=logging.INFO)
 
-def generate_params(func) -> List[Dict[str, str]]:
-    sig = inspect.signature(func)
-    args = []
+class Params(BaseModel):
+    name: str
+    default: str
+
+class GenerateParams(BaseModel):
+    params: List[Params]
+    command_argument: str
+
+def generate_params(callable) -> GenerateParams:
+    params_list = []
+    command_argument = ""
+
+    sig = inspect.signature(callable) 
 
     for name, param in sig.parameters.items():
-        arg_info = {
+        param_info = {
             "name": name,
             "default": param.default
             if param.default != inspect.Parameter.empty
             else None,
         }
-        args.append(arg_info)
+        params_list.append(param_info)
 
     params = [
         Param(
-            name=arg_info["name"],
-            default=arg_info["default"],
+            name=param_info["name"],
+            default=param_info["default"],
         )
-        for arg_info in args
+        for param_info in params_list
     ]
 
-    return params
+    command_argument = " ".join(f"--{param_info['name']} {{{{{param_info['name']}}}}}" for param_info in params_list)
+  
+    return GenerateParams(params=params, command_argument=command_argument)

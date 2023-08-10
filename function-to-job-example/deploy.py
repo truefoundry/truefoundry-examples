@@ -1,5 +1,5 @@
 import argparse
-import os
+import json
 import logging
 from utils import generate_params
 from module1 import normal
@@ -11,10 +11,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--workspace_fqn", required=True, type=str)
 args = parser.parse_args()
 
+params = generate_params(normal)
+
 # First we define how to build our code into a Docker image
 image = Build(
     build_spec=PythonBuild(
-        command="python main.py normal --loc {{loc}} --scale {{scale}}",
+        command=f"python main.py normal {params.command_argument}",
         requirements_path="requirements.txt",
     )
 )
@@ -22,7 +24,7 @@ image = Build(
 job = Job(
     name="function-job-with-params",
     image=image,
-    params=generate_params(normal),
+    params=params.params,
     resources=Resources(
         cpu_request=0.25,
         cpu_limit=0.5,
