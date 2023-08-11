@@ -1,9 +1,10 @@
 import argparse
-import json
 import logging
-from utils import generate_params
+
+from servicefoundry import Job, Build, PythonBuild, Resources
+
 from module1 import normal
-from servicefoundry import Job, Build, PythonBuild, Resources, Param
+from utils import generate_params
 
 logging.basicConfig(level=logging.INFO)
 
@@ -13,10 +14,12 @@ args = parser.parse_args()
 
 params = generate_params(normal)
 
-# First we define how to build our code into a Docker image
+print(params)
+
+
 image = Build(
     build_spec=PythonBuild(
-        command=f"python main.py normal {params.command_argument}",
+        command=f"python -u main.py normal {params.command_argument}",
         requirements_path="requirements.txt",
     )
 )
@@ -26,12 +29,12 @@ job = Job(
     image=image,
     params=params.params,
     resources=Resources(
-        cpu_request=0.25,
-        cpu_limit=0.5,
-        memory_request=512,
-        memory_limit=512,
-        ephemeral_storage_limit=512,
-        ephemeral_storage_request=512,
+        cpu_request=0.1,
+        cpu_limit=0.1,
+        memory_request=256,
+        memory_limit=256,
+        ephemeral_storage_limit=100,
+        ephemeral_storage_request=100,
     ),
 )
 job.deploy(workspace_fqn=args.workspace_fqn)

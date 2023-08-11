@@ -7,3 +7,4 @@ app = typer.Typer()
 app.command()(normal)
 app.command()(uniform)
 app()
+
