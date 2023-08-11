@@ -10,20 +10,15 @@ def experiment_track(model, params, metrics, X_train, X_test):
     mlf_api = mlf.get_client()
 
     # create a ml repo
-
-    mlf_api.create_ml_repo("churn-prediction-rubrik")
+    mlf_api.create_ml_repo("churn-pred")
     # create a run
     mlf_run = mlf_api.create_run(
-        ml_repo="churn-prediction-rubrik", run_name="churn-train-job"
+        ml_repo="churn-pred", run_name="churn-train-job"
     )
     # log the hyperparameters
     mlf_run.log_params(params)
     # log the metrics
     mlf_run.log_metrics(metrics)
-    # log the train dataset
-    mlf_run.log_dataset("train", X_train)
-    # log the test dataset
-    mlf_run.log_dataset("test", X_test)
     # log the model
     model_version = mlf_run.log_model(
         name="churn-model",
@@ -59,8 +54,8 @@ def train_model(hyperparams):
 
     # Fit the classifier with the training data
     classifier.fit(X_train, y_train)
-    # Get the predictions
     y_pred = classifier.predict(X_test)
+    
     # Get the ground truth labels
     labels = list(set(y))
 

@@ -8,6 +8,8 @@ resources:
   memory_request: 200
   ephemeral_storage_limit: 2000
   ephemeral_storage_request: 1000
+endpoint:
+  host: <Enter the target host for your model>
 model_source:
   type: tfy-model-registry
-  model_version_fqn: model:truefoundry/user-truefoundry/churn-prediction-3/churn-model:2
+  model_version_fqn: <Enter model version fqn here>
