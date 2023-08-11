@@ -43,17 +43,14 @@ def predict(*val):
     
     r = resp.json()
     # return the output and model_version
-    return [ r["outputs"][0]["data"][0],  r["model_version"]]
+    return [ r["outputs"][0]["data"][0]]
 
-# description for the gradio application
-desc = f"""## Demo Deployed at {datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")}"""
 
 # setup Gradio Interface
 app = gr.Interface(
     fn=predict,
     inputs=inputs,
-    outputs=[gr.Textbox(label="Churn"), gr.Textbox(label="Model Version")],
-    description=desc,
+    outputs=[gr.Textbox(label="Churn")],
     title="Churn Predictor",
 )
 # launch the gradio interface
