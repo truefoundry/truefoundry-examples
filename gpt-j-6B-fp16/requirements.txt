@@ -1,5 +1,5 @@
 --extra-index-url https://download.pytorch.org/whl/cu113
-torch==1.12.1+cu113
+torch==1.13.1
 torchvision==0.13.1+cu113
 tokenizers==0.13.2
 accelerate==0.16.0
