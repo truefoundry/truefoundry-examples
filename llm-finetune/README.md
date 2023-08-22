@@ -34,10 +34,9 @@ deepspeed --num_gpus 1 train.py \
 
 #### For CPU
 
-`--no_cuda` is broken on 4.29.2 :(
 
 ```shell
-CUDA_VISIBLE_DEVICES=none python train.py \
+    python train.py \
                           --output_dir ./model \
                           --cleanup_output_dir_on_start \
                           --max_num_samples 10 \

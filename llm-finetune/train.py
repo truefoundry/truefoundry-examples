@@ -14,12 +14,15 @@ from typing import Any, Dict, Optional
 import mlfoundry
 import numpy as np
 import torch
+import torch.backends.cuda
 import torch.distributed
 from huggingface_hub import scan_cache_dir
 from cloudfiles import CloudFile
 import re
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
+from trl import SFTTrainer
+from peft import LoraConfig, get_peft_model, AutoPeftModelForCausalLM
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
@@ -41,6 +44,18 @@ from transformers.utils import (
     is_torch_tf32_available,
 )
 from transformers.utils import logging as hf_logging_utils
+
+# TODO (chiragjn): 
+#   - Test resume from checkpoint for both full and lora
+#   - Add support for 8 bit and 4 bit QLora
+#   - Test support for fp16 on older GPUs
+#   - Write a script to automatically capture gpu and memory metrics with different configurations
+#   - Test and fix Deepspeed weight gathering bugs during checkpointing if any
+#   - Test and fix code saving for models that have custom code
+#   - Add support to push to HF Hub, as well as ability to read gated models
+#   - Add support for multi gpu Lora
+#   - Add support for text2text-generation
+#   - Add support to use  Apex FusedAdam
 
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
@@ -70,8 +85,9 @@ class HFTrainingArguments(TrainingArguments):
 @dataclass
 class OtherArguments:
     model_id: str = field(metadata={"help": "Huggingface hub model ID"})
-    train_data: str = field(metadata={"help": "URL to the jsonl training dataset"})
+    # TODO (chiragjn): Make this optional, because now we have --report_to_mlfoundry
     ml_repo: str = field(metadata={"help": "ML Repo to put the model to"})
+    train_data: str = field(metadata={"help": "URL to the jsonl training dataset"})
     eval_size: Optional[float] = field(
         default=0.1,
         metadata={"help": "Proportion of training data to use as evaluation set. Ignored if `eval_data` is passed"},
@@ -88,12 +104,31 @@ class OtherArguments:
         default=True,
         metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
     )
+    # TODO (chiragjn): Add option to control max shard size
     checkpoint_artifact_name: Optional[str] = field(
         default=None,
         metadata={
             "help": "ML Repo artifact name to save checkpoints. \n"
             "The artifact will be created if it does not exist under the give ML Repo"
         },
+    )
+    use_lora: bool = field(
+        default=False,
+        metadata={"help": "If to train the model with LoRa"},
+    )
+    #  "c_attn", "down_proj", "gate_proj", "up_proj", "query_key_value" "dense", "dense_h_to_4h", "dense_4h_to_h",
+    lora_config: str = field(
+        default=json.dumps(
+            dict(
+                r=8,
+                lora_alpha=32,
+                target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+                lora_dropout=0.05,
+                bias="none",
+                task_type="CAUSAL_LM",
+            )
+        ),
+        metadata={"help": "Json encoded string containing config for lora training"},
     )
     max_length: Optional[int] = field(
         default=None,
@@ -110,7 +145,7 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
-    # TODO (chiragjn): Add option to control max shard size
+    
 
 
 # --- Model checkpointing and logging utils ---
@@ -444,10 +479,13 @@ def load_data(path, max_num_samples: Optional[int] = None):
     n = max_num_samples if max_num_samples else -1
     count = 0
     with tempfile.TemporaryDirectory() as download_dir:
-        if path.startswith("mlfoundry://"):
+        if path.startswith("mlfoundry://") or path.startswith("artifact:"):
             logger.info("Downloading artifact from mlfoundry")
             client = mlfoundry.get_client()
-            _, artifact_version_fqn = path.split("mlfoundry://", 1)
+            if path.startswith("mlfoundry://"):
+                _, artifact_version_fqn = path.split("mlfoundry://", 1)
+            else:
+                artifact_version_fqn = path
             download_path = client.get_artifact(artifact_version_fqn).download(download_dir)
             lines = _read_lines_from_files(download_path)
         else:
@@ -527,20 +565,26 @@ def setup(training_arguments: HFTrainingArguments):
     hf_logging_utils.add_handler(handler)
 
 
-def get_model(model_source: str, training_arguments: HFTrainingArguments):
-    # TODO (chiragjn): Should we pass a torch_dtype here?
-    logger.info("Loading model...")
+def get_torch_dtype(training_arguments: HFTrainingArguments):
     torch_dtype = None
     if training_arguments.bf16:
         torch_dtype = torch.bfloat16
     elif training_arguments.fp16:
         torch_dtype = torch.float16
+    return torch_dtype
+
+
+def get_model(model_source: str, training_arguments: HFTrainingArguments):
+    # TODO (chiragjn): Should we pass a torch_dtype here?
+    logger.info("Loading model...")
     model = AutoModelForCausalLM.from_pretrained(
         model_source,
         trust_remote_code=True,
         use_cache=False if training_arguments.gradient_checkpointing else True,
-        torch_dtype=torch_dtype,
+        torch_dtype=get_torch_dtype(training_arguments),
     )
+    if training_arguments.gradient_checkpointing:
+        model.config.use_cache = False 
     return model
 
 
@@ -606,6 +650,9 @@ def train(
             logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {training_arguments.output_dir}")
             shutil.rmtree(training_arguments.output_dir)
 
+    if other_arguments.use_lora:
+        other_arguments.lora_config = LoraConfig(**json.loads(other_arguments.lora_config))
+
     set_seed(training_arguments.seed)
 
     if training_arguments.world_size > 1 and training_arguments.local_rank > 0:
@@ -651,6 +698,19 @@ def train(
         # There are some strategies that also assign unk token as pad token
         # We can also assign the average of all embeddings here for new tokens that got added
 
+    if other_arguments.use_lora:
+        logger.info("Applying peft config ...")
+        other_arguments.lora_config.inference_mode = False
+        model = get_peft_model(model, other_arguments.lora_config)
+        if training_arguments.bf16:
+            model.to(torch.bfloat16)
+        elif training_arguments.fp16:
+            model.to(torch.float16)
+        if training_arguments.gradient_checkpointing:
+            model.enable_input_require_grads()
+
+        model.print_trainable_parameters()
+    
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
@@ -700,6 +760,21 @@ def train(
     if training_arguments.world_size > 1:
         logger.info("Syncing all processes")
         torch.distributed.barrier()
+
+    if other_arguments.use_lora:
+        if training_arguments.local_rank <= 0:
+            logger.info("Merging lora adapter into main model")
+            model = AutoPeftModelForCausalLM.from_pretrained(
+                training_arguments.output_dir, 
+                low_cpu_mem_usage=True,
+                torch_dtype=get_torch_dtype(training_arguments),
+            )
+            model = model.merge_and_unload()
+            model.save_pretrained(training_arguments.output_dir, safe_serialization=True)
+            for filename in ["adapter_config.json", "adapter_model.safetensors", "adapter_model.bin"]:
+                file_to_delete = os.path.join(training_arguments.output_dir, filename)
+                if os.path.exists(file_to_delete):
+                    os.remove(file_to_delete)
 
 
 def main():
