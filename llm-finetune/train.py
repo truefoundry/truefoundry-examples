@@ -1,4 +1,3 @@
-import pdb
 import copy
 import gc
 import json
@@ -46,9 +45,17 @@ from transformers.utils import (
 )
 from transformers.utils import logging as hf_logging_utils
 
-# TODO (chiragjn): Add support for text2text-generation
-# TODO (chiragjn): Add support for flash attention - `torch.backends.cuda.sdp_kernel`
-# TODO (chiragjn): Test resume from checkpoint for both full and lora
+# TODO (chiragjn): 
+#   - Test resume from checkpoint for both full and lora
+#   - Add support for 8 bit and 4 bit QLora
+#   - Test support for fp16 on older GPUs
+#   - Write a script to automatically capture gpu and memory metrics with different configurations
+#   - Test and fix Deepspeed weight gathering bugs during checkpointing if any
+#   - Test and fix code saving for models that have custom code
+#   - Add support to push to HF Hub, as well as ability to read gated models
+#   - Add support for multi gpu Lora
+#   - Add support for text2text-generation
+#   - Add support to use  Apex FusedAdam
 
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
@@ -472,10 +479,13 @@ def load_data(path, max_num_samples: Optional[int] = None):
     n = max_num_samples if max_num_samples else -1
     count = 0
     with tempfile.TemporaryDirectory() as download_dir:
-        if path.startswith("mlfoundry://"):
+        if path.startswith("mlfoundry://") or path.startswith("artifact:"):
             logger.info("Downloading artifact from mlfoundry")
             client = mlfoundry.get_client()
-            _, artifact_version_fqn = path.split("mlfoundry://", 1)
+            if path.startswith("mlfoundry://"):
+                _, artifact_version_fqn = path.split("mlfoundry://", 1)
+            else:
+                artifact_version_fqn = path
             download_path = client.get_artifact(artifact_version_fqn).download(download_dir)
             lines = _read_lines_from_files(download_path)
         else:
@@ -553,7 +563,6 @@ def setup(training_arguments: HFTrainingArguments):
 
     hf_logging_utils.disable_default_handler()
     hf_logging_utils.add_handler(handler)
-
 
 
 def get_torch_dtype(training_arguments: HFTrainingArguments):
@@ -700,7 +709,7 @@ def train(
         if training_arguments.gradient_checkpointing:
             model.enable_input_require_grads()
 
-    model.print_trainable_parameters()
+        model.print_trainable_parameters()
     
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -766,6 +775,7 @@ def train(
                 file_to_delete = os.path.join(training_arguments.output_dir, filename)
                 if os.path.exists(file_to_delete):
                     os.remove(file_to_delete)
+
 
 def main():
     parser = HfArgumentParser(
