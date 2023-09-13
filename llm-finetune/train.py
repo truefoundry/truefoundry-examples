@@ -22,12 +22,13 @@ import re
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
 from trl import SFTTrainer
-from peft import LoraConfig, get_peft_model, AutoPeftModelForCausalLM
+from peft import LoraConfig, get_peft_model, AutoPeftModelForCausalLM, prepare_model_for_kbit_training
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
     AutoTokenizer,
+    BitsAndBytesConfig,
     HfArgumentParser,
     IntervalStrategy,
     Trainer,
@@ -129,6 +130,39 @@ class OtherArguments:
             )
         ),
         metadata={"help": "Json encoded string containing config for lora training"},
+    )
+    use_qlora: bool = field(
+        default=False,
+        metadata={"help": "If to train the model with qLoRa"},
+    )
+    quant_dtype: Optional[str] = field(
+        default='nf4',
+        metadata={"help": "quantization data type"},
+    )
+    use_double_quant: bool = field(
+        default=True,
+        metadata={"help": "This flag is used for nested quantization where the quantization constants from the first quantization are quantized again"},
+    )
+    qlora_bits: int = field(
+        default=4,
+        metadata={"help": "To enable 8 bit quantization set this to 8 or else by default it is 4"},
+    )
+    llm_int8_threshold :float = field(
+        default=6.0,
+        metadata={"help": "This corresponds to the outlier threshold for outlier detection as described in `LLM.int8()"},
+    )
+    llm_int8_enable_fp32_cpu_offload: bool = field(
+        default=False,
+        metadata={
+            "help": "If you want to splityour model in different parts and run some parts in int8 on GPU and some parts in fp32 on CPU,\
+                you can use this flag."
+        },
+    )
+    llm_int8_has_fp16_weight: bool = field(
+        default=False,
+        metadata={
+            "help": " This flag runs LLM.int8() with 16-bit main weights"
+        },
     )
     max_length: Optional[int] = field(
         default=None,
@@ -574,7 +608,7 @@ def get_torch_dtype(training_arguments: HFTrainingArguments):
     return torch_dtype
 
 
-def get_model(model_source: str, training_arguments: HFTrainingArguments):
+def get_model(model_source: str, training_arguments: HFTrainingArguments, other_arguments: OtherArguments,):
     # TODO (chiragjn): Should we pass a torch_dtype here?
     logger.info("Loading model...")
     model = AutoModelForCausalLM.from_pretrained(
@@ -585,6 +619,22 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments):
     )
     if training_arguments.gradient_checkpointing:
         model.config.use_cache = False 
+    
+    if other_arguments.use_qlora:
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=other_arguments.qlora_bits == 4,
+            load_in_8bit=other_arguments.qlora_bits == 8,
+            llm_int8_threshold=other_arguments.llm_int8_threshold,
+            llm_int8_has_fp16_weight=other_arguments.llm_int8_has_fp16_weight,
+            bnb_4bit_compute_dtype=get_torch_dtype(training_arguments=training_arguments),
+            bnb_4bit_use_double_quant=other_arguments.use_double_quant,
+            bnb_4bit_quant_type=other_arguments.quant_dtype,
+        )
+        model.config.quantization_config = bnb_config
+        logger.info('+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
+        logger.info(model.config)
+        model = prepare_model_for_kbit_training(model)
+
     return model
 
 
@@ -650,7 +700,7 @@ def train(
             logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {training_arguments.output_dir}")
             shutil.rmtree(training_arguments.output_dir)
 
-    if other_arguments.use_lora:
+    if other_arguments.use_lora or other_arguments.use_qlora:
         other_arguments.lora_config = LoraConfig(**json.loads(other_arguments.lora_config))
 
     set_seed(training_arguments.seed)
@@ -691,14 +741,14 @@ def train(
         logger.info("Getting other ranks in sync with main process")
         torch.distributed.barrier()
 
-    model = get_model(model_source, training_arguments=training_arguments)
+    model = get_model(model_source, training_arguments=training_arguments, other_arguments=other_arguments)
     if num_new_tokens > 0:
         logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
         # There are some strategies that also assign unk token as pad token
         # We can also assign the average of all embeddings here for new tokens that got added
 
-    if other_arguments.use_lora:
+    if other_arguments.use_lora or other_arguments.use_qlora:
         logger.info("Applying peft config ...")
         other_arguments.lora_config.inference_mode = False
         model = get_peft_model(model, other_arguments.lora_config)
@@ -716,7 +766,7 @@ def train(
         torch.cuda.synchronize()
 
     logger.info("Training...")
-    # TODO (chiragjn): Add text generation metrics to `compute_metrics`
+    # TODO (chiragjn): Add text generation metrics to `compute_metrics
     trainer = Trainer(
         model=model,
         tokenizer=tokenizer,
@@ -761,7 +811,7 @@ def train(
         logger.info("Syncing all processes")
         torch.distributed.barrier()
 
-    if other_arguments.use_lora:
+    if other_arguments.use_lora or other_arguments.use_qlora:
         if training_arguments.local_rank <= 0:
             logger.info("Merging lora adapter into main model")
             model = AutoPeftModelForCausalLM.from_pretrained(
