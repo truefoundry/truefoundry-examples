@@ -631,8 +631,6 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             bnb_4bit_quant_type=other_arguments.quant_dtype,
         )
         model.config.quantization_config = bnb_config
-        logger.info('+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
-        logger.info(model.config)
         model = prepare_model_for_kbit_training(model)
 
     return model
