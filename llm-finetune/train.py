@@ -143,7 +143,7 @@ class OtherArguments:
         default=True,
         metadata={"help": "This flag is used for nested quantization where the quantization constants from the first quantization are quantized again"},
     )
-    qlora_bits: int = field(
+    qlora_bit_length: int = field(
         default=4,
         metadata={"help": "To enable 8 bit quantization set this to 8 or else by default it is 4"},
     )
@@ -613,8 +613,8 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
     logger.info("Loading model...")
     if other_arguments.use_qlora:
         bnb_config = BitsAndBytesConfig(
-            load_in_4bit=other_arguments.qlora_bits == 4,
-            load_in_8bit=other_arguments.qlora_bits == 8,
+            load_in_4bit=other_arguments.qlora_bit_length == 4,
+            load_in_8bit=other_arguments.qlora_bit_length == 8,
             llm_int8_threshold=other_arguments.llm_int8_threshold,
             llm_int8_has_fp16_weight=other_arguments.llm_int8_has_fp16_weight,
             bnb_4bit_compute_dtype=get_torch_dtype(training_arguments=training_arguments),
