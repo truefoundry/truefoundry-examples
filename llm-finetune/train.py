@@ -611,15 +611,6 @@ def get_torch_dtype(training_arguments: HFTrainingArguments):
 def get_model(model_source: str, training_arguments: HFTrainingArguments, other_arguments: OtherArguments,):
     # TODO (chiragjn): Should we pass a torch_dtype here?
     logger.info("Loading model...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_source,
-        trust_remote_code=True,
-        use_cache=False if training_arguments.gradient_checkpointing else True,
-        torch_dtype=get_torch_dtype(training_arguments),
-    )
-    if training_arguments.gradient_checkpointing:
-        model.config.use_cache = False 
-    
     if other_arguments.use_qlora:
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=other_arguments.qlora_bits == 4,
@@ -630,8 +621,24 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             bnb_4bit_use_double_quant=other_arguments.use_double_quant,
             bnb_4bit_quant_type=other_arguments.quant_dtype,
         )
-        model.config.quantization_config = bnb_config
+        model = AutoModelForCausalLM.from_pretrained(
+                model_source,
+                trust_remote_code=True,
+                use_cache=False if training_arguments.gradient_checkpointing else True,
+                quantization_config=bnb_config,
+            )
         model = prepare_model_for_kbit_training(model)
+
+        return model
+
+    model = AutoModelForCausalLM.from_pretrained(
+        model_source,
+        trust_remote_code=True,
+        use_cache=False if training_arguments.gradient_checkpointing else True,
+        torch_dtype=get_torch_dtype(training_arguments),
+    )
+    if training_arguments.gradient_checkpointing:
+        model.config.use_cache = False 
 
     return model
 
