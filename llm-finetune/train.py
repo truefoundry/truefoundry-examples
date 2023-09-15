@@ -135,9 +135,9 @@ class OtherArguments:
         default=False,
         metadata={"help": "If to train the model with qLoRa"},
     )
-    quant_dtype: Optional[str] = field(
+    bnb_4bit_quant_type: Optional[str] = field(
         default='nf4',
-        metadata={"help": "quantization data type"},
+        metadata={"help": "quantization data type options are {'nf4', 'fp4'}, by default it is nf4"},
     )
     use_double_quant: bool = field(
         default=True,
@@ -146,23 +146,6 @@ class OtherArguments:
     qlora_bit_length: int = field(
         default=4,
         metadata={"help": "To enable 8 bit quantization set this to 8 or else by default it is 4"},
-    )
-    llm_int8_threshold :float = field(
-        default=6.0,
-        metadata={"help": "This corresponds to the outlier threshold for outlier detection as described in `LLM.int8()"},
-    )
-    llm_int8_enable_fp32_cpu_offload: bool = field(
-        default=False,
-        metadata={
-            "help": "If you want to splityour model in different parts and run some parts in int8 on GPU and some parts in fp32 on CPU,\
-                you can use this flag."
-        },
-    )
-    llm_int8_has_fp16_weight: bool = field(
-        default=False,
-        metadata={
-            "help": " This flag runs LLM.int8() with 16-bit main weights"
-        },
     )
     max_length: Optional[int] = field(
         default=None,
@@ -615,11 +598,9 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=other_arguments.qlora_bit_length == 4,
             load_in_8bit=other_arguments.qlora_bit_length == 8,
-            llm_int8_threshold=other_arguments.llm_int8_threshold,
-            llm_int8_has_fp16_weight=other_arguments.llm_int8_has_fp16_weight,
             bnb_4bit_compute_dtype=get_torch_dtype(training_arguments=training_arguments),
             bnb_4bit_use_double_quant=other_arguments.use_double_quant,
-            bnb_4bit_quant_type=other_arguments.quant_dtype,
+            bnb_4bit_quant_type=other_arguments.bnb_4bit_quant_type,
         )
         model = AutoModelForCausalLM.from_pretrained(
                 model_source,
