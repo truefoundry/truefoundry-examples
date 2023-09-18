@@ -43,7 +43,6 @@ from transformers.utils import (
     is_torch_tf32_available,
 )
 from transformers.utils import logging as hf_logging_utils
-from trl import SFTTrainer
 
 # TODO (chiragjn):
 #   - Test resume from checkpoint for both full and lora
