@@ -808,8 +808,14 @@ def main():
             shutil.rmtree(training_arguments.output_dir)
 
     # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
-    _tempdir = tempfile.gettempdir()
-    os.makedirs(_tempdir, exist_ok=True)
+    _tempdir = os.getenv("TMPDIR")
+    if _tempdir:
+        if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
+            raise "The temporary directory provided is a file, please change the directory path by setting `TEMPDIR` in environment variable"
+        else:
+            os.makedirs(_tempdir, exist_ok=True)
+    else:
+        raise "Please set the temporary directory path by setting `TMPDIR` environment variable"
     
     # TODO (chiragjn): Enabled faster kernels for scaled dot product
     # with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=True, enable_mem_efficient=True):
