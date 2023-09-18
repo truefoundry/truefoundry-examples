@@ -811,7 +811,7 @@ def main():
     _tempdir = os.getenv("TMPDIR")
     if _tempdir:
         if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
-            raise "The temporary directory provided is a file, please change the directory path by setting `TEMPDIR` in environment variable"
+            raise  ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
         else:
             os.makedirs(_tempdir, exist_ok=True)
     
