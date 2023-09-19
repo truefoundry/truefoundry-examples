@@ -838,6 +838,20 @@ def main():
         # TODO: there are 110 params in training_arguments, we do not need to log all of them.
         # run.log_params(training_arguments.to_sanitized_dict(), flatten_params=True)
 
+    # Disk space management
+    if training_arguments.local_rank <= 0:
+        if other_arguments.cleanup_output_dir_on_start and os.path.exists(training_arguments.output_dir):
+            logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {training_arguments.output_dir}")
+            shutil.rmtree(training_arguments.output_dir)
+
+    # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
+    _tempdir = os.getenv("TMPDIR")
+    if _tempdir:
+        if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
+            raise  ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
+        else:
+            os.makedirs(_tempdir, exist_ok=True)
+    
     # TODO (chiragjn): Enabled faster kernels for scaled dot product
     # with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=True, enable_mem_efficient=True):
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
