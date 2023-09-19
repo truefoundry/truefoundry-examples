@@ -608,7 +608,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             use_cache=False if training_arguments.gradient_checkpointing else True,
             quantization_config=bnb_config,
         )
-        model = prepare_model_for_kbit_training(model)
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=training_arguments.gradient_checkpointing)
     else:
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
