@@ -4,6 +4,7 @@ import json
 import logging
 import math
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -16,13 +17,11 @@ import numpy as np
 import torch
 import torch.backends.cuda
 import torch.distributed
-from huggingface_hub import scan_cache_dir
 from cloudfiles import CloudFile
-import re
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
-from trl import SFTTrainer
-from peft import LoraConfig, get_peft_model, AutoPeftModelForCausalLM
+from huggingface_hub import scan_cache_dir
+from peft import AutoPeftModelForCausalLM, LoraConfig, get_peft_model
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
@@ -45,7 +44,7 @@ from transformers.utils import (
 )
 from transformers.utils import logging as hf_logging_utils
 
-# TODO (chiragjn): 
+# TODO (chiragjn):
 #   - Test resume from checkpoint for both full and lora
 #   - Add support for 8 bit and 4 bit QLora
 #   - Test support for fp16 on older GPUs
@@ -145,7 +144,15 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
-    
+
+
+def get_torch_dtype(training_arguments: HFTrainingArguments):
+    torch_dtype = None
+    if training_arguments.bf16:
+        torch_dtype = torch.bfloat16
+    elif training_arguments.fp16:
+        torch_dtype = torch.float16
+    return torch_dtype
 
 
 # --- Model checkpointing and logging utils ---
@@ -232,17 +239,14 @@ def cleanup_checkpoints(
 
 
 def log_model_as_pipeline(
-    run: mlfoundry.MlFoundryRun,
-    training_arguments: HFTrainingArguments,
-    model_name: str,
-    hf_hub_model_id: str
+    run: mlfoundry.MlFoundryRun, training_arguments: HFTrainingArguments, model_name: str, hf_hub_model_id: str
 ):
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     logger.info("Saving Model...")
     cleanup_checkpoints(training_arguments=training_arguments)
-    
+
     hf_cache_info = scan_cache_dir()
     files_to_save = []
     for repo in hf_cache_info.repos:
@@ -252,7 +256,7 @@ def log_model_as_pipeline(
                     if file.file_path.name.endswith(".py"):
                         files_to_save.append(file.file_path)
                 break
-    
+
     additional_files = []
     # copy the files to output_dir of pipeline
     for file_path in files_to_save:
@@ -271,6 +275,8 @@ def log_model_as_pipeline(
         model=training_arguments.output_dir,
         tokenizer=training_arguments.output_dir,
         trust_remote_code=True,
+        torch_dtype=get_torch_dtype(training_arguments=training_arguments),
+        device_map="auto",  # We load on GPUs if available because we can be low on regular memory
     )
     run.log_model(
         name=model_name,
@@ -565,15 +571,6 @@ def setup(training_arguments: HFTrainingArguments):
     hf_logging_utils.add_handler(handler)
 
 
-def get_torch_dtype(training_arguments: HFTrainingArguments):
-    torch_dtype = None
-    if training_arguments.bf16:
-        torch_dtype = torch.bfloat16
-    elif training_arguments.fp16:
-        torch_dtype = torch.float16
-    return torch_dtype
-
-
 def get_model(model_source: str, training_arguments: HFTrainingArguments):
     # TODO (chiragjn): Should we pass a torch_dtype here?
     logger.info("Loading model...")
@@ -584,7 +581,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments):
         torch_dtype=get_torch_dtype(training_arguments),
     )
     if training_arguments.gradient_checkpointing:
-        model.config.use_cache = False 
+        model.config.use_cache = False
     return model
 
 
@@ -705,7 +702,7 @@ def train(
             model.enable_input_require_grads()
 
         model.print_trainable_parameters()
-    
+
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
@@ -760,7 +757,7 @@ def train(
         if training_arguments.local_rank <= 0:
             logger.info("Merging lora adapter into main model")
             model = AutoPeftModelForCausalLM.from_pretrained(
-                training_arguments.output_dir, 
+                training_arguments.output_dir,
                 low_cpu_mem_usage=True,
                 torch_dtype=get_torch_dtype(training_arguments),
             )
@@ -811,16 +808,21 @@ def main():
     _tempdir = os.getenv("TMPDIR")
     if _tempdir:
         if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
-            raise  ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
+            raise ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
         else:
             os.makedirs(_tempdir, exist_ok=True)
-    
+
     # TODO (chiragjn): Enabled faster kernels for scaled dot product
     # with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=True, enable_mem_efficient=True):
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
 
     if training_arguments.local_rank <= 0 and run:
-        log_model_as_pipeline(run=run, training_arguments=training_arguments, model_name=model_name, hf_hub_model_id=other_arguments.model_id)
+        log_model_as_pipeline(
+            run=run,
+            training_arguments=training_arguments,
+            model_name=model_name,
+            hf_hub_model_id=other_arguments.model_id,
+        )
         run.end()
 
 

@@ -1,2 +1,2 @@
-servicefoundry==0.9.8
-mlfoundry==0.9.0
+servicefoundry==0.9.19
+mlfoundry==0.9.8
