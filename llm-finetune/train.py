@@ -588,7 +588,7 @@ def setup(training_arguments: HFTrainingArguments):
     hf_logging_utils.add_handler(handler)
 
 
-def get_model(model_source: str, training_arguments: HFTrainingArguments):
+def get_model(model_source: str, training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     # TODO (chiragjn): Should we pass a torch_dtype here?
     logger.info("Loading model...")
     if other_arguments.use_qlora:
