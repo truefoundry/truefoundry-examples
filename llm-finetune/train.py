@@ -603,8 +603,10 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             model_source,
             trust_remote_code=True,
             use_cache=False if training_arguments.gradient_checkpointing else True,
+            torch_dtype=get_torch_dtype(training_arguments),
             quantization_config=bnb_config,
         )
+
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=training_arguments.gradient_checkpointing)
     else:
         model = AutoModelForCausalLM.from_pretrained(
@@ -698,10 +700,13 @@ def train(
         checkpoint_artifact_name=other_arguments.checkpoint_artifact_name,
     )
 
-    model_source = other_arguments.model_id
-
     logger.info("Loading config ...")
-    model_config = AutoConfig.from_pretrained(model_source)
+    model_config = AutoConfig.from_pretrained(other_arguments.model_id)
+
+    if last_checkpoint_dir:
+        model_source = last_checkpoint_dir
+    else:
+        model_source = other_arguments.model_id
 
     tokenizer, num_new_tokens = get_tokenizer(model_source)
 
