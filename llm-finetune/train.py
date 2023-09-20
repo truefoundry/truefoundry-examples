@@ -21,12 +21,18 @@ from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
 from huggingface_hub import scan_cache_dir
-from peft import AutoPeftModelForCausalLM, LoraConfig, get_peft_model
+from peft import (
+    AutoPeftModelForCausalLM,
+    LoraConfig,
+    get_peft_model,
+    prepare_model_for_kbit_training,
+)
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
     AutoTokenizer,
+    BitsAndBytesConfig,
     HfArgumentParser,
     IntervalStrategy,
     Trainer,
@@ -128,6 +134,24 @@ class OtherArguments:
             )
         ),
         metadata={"help": "Json encoded string containing config for lora training"},
+    )
+    use_qlora: bool = field(
+        default=False,
+        metadata={"help": "If to train the model with qLoRa"},
+    )
+    bnb_4bit_quant_type: Optional[str] = field(
+        default="nf4",
+        metadata={"help": "quantization data type options are {'nf4', 'fp4'}, by default it is nf4"},
+    )
+    use_double_quant: bool = field(
+        default=True,
+        metadata={
+            "help": "This flag is used for nested quantization where the quantization constants from the first quantization are quantized again"
+        },
+    )
+    qlora_bit_length: int = field(
+        default=4,
+        metadata={"help": "To enable 8 bit quantization set this to 8 or else by default it is 4"},
     )
     max_length: Optional[int] = field(
         default=None,
@@ -571,15 +595,36 @@ def setup(training_arguments: HFTrainingArguments):
     hf_logging_utils.add_handler(handler)
 
 
-def get_model(model_source: str, training_arguments: HFTrainingArguments):
+def get_model(model_source: str, training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     # TODO (chiragjn): Should we pass a torch_dtype here?
     logger.info("Loading model...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_source,
-        trust_remote_code=True,
-        use_cache=False if training_arguments.gradient_checkpointing else True,
-        torch_dtype=get_torch_dtype(training_arguments),
-    )
+    if other_arguments.use_qlora:
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=other_arguments.qlora_bit_length == 4,
+            load_in_8bit=other_arguments.qlora_bit_length == 8,
+            bnb_4bit_compute_dtype=get_torch_dtype(training_arguments=training_arguments),
+            bnb_4bit_use_double_quant=other_arguments.use_double_quant,
+            bnb_4bit_quant_type=other_arguments.bnb_4bit_quant_type,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_source,
+            trust_remote_code=True,
+            use_cache=False if training_arguments.gradient_checkpointing else True,
+            torch_dtype=get_torch_dtype(training_arguments),
+            quantization_config=bnb_config,
+        )
+
+        model = prepare_model_for_kbit_training(
+            model, use_gradient_checkpointing=training_arguments.gradient_checkpointing
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_source,
+            trust_remote_code=True,
+            use_cache=False if training_arguments.gradient_checkpointing else True,
+            torch_dtype=get_torch_dtype(training_arguments),
+        )
+
     if training_arguments.gradient_checkpointing:
         model.config.use_cache = False
     return model
@@ -642,7 +687,7 @@ def train(
     other_arguments: OtherArguments,
     run: Optional[mlfoundry.MlFoundryRun] = None,
 ):
-    if other_arguments.use_lora:
+    if other_arguments.use_lora or other_arguments.use_qlora:
         other_arguments.lora_config = LoraConfig(**json.loads(other_arguments.lora_config))
 
     set_seed(training_arguments.seed)
@@ -659,13 +704,13 @@ def train(
         checkpoint_artifact_name=other_arguments.checkpoint_artifact_name,
     )
 
+    logger.info("Loading config ...")
+    model_config = AutoConfig.from_pretrained(other_arguments.model_id)
+
     if last_checkpoint_dir:
         model_source = last_checkpoint_dir
     else:
         model_source = other_arguments.model_id
-
-    logger.info("Loading config ...")
-    model_config = AutoConfig.from_pretrained(model_source)
 
     tokenizer, num_new_tokens = get_tokenizer(model_source)
 
@@ -683,14 +728,14 @@ def train(
         logger.info("Getting other ranks in sync with main process")
         torch.distributed.barrier()
 
-    model = get_model(model_source, training_arguments=training_arguments)
+    model = get_model(model_source, training_arguments=training_arguments, other_arguments=other_arguments)
     if num_new_tokens > 0:
         logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
         # There are some strategies that also assign unk token as pad token
         # We can also assign the average of all embeddings here for new tokens that got added
 
-    if other_arguments.use_lora:
+    if other_arguments.use_lora or other_arguments.use_qlora:
         logger.info("Applying peft config ...")
         other_arguments.lora_config.inference_mode = False
         model = get_peft_model(model, other_arguments.lora_config)
@@ -708,7 +753,7 @@ def train(
         torch.cuda.synchronize()
 
     logger.info("Training...")
-    # TODO (chiragjn): Add text generation metrics to `compute_metrics`
+    # TODO (chiragjn): Add text generation metrics to `compute_metrics
     trainer = Trainer(
         model=model,
         tokenizer=tokenizer,
@@ -753,7 +798,7 @@ def train(
         logger.info("Syncing all processes")
         torch.distributed.barrier()
 
-    if other_arguments.use_lora:
+    if other_arguments.use_lora or other_arguments.use_qlora:
         if training_arguments.local_rank <= 0:
             logger.info("Merging lora adapter into main model")
             model = AutoPeftModelForCausalLM.from_pretrained(
