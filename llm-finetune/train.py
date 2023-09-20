@@ -21,7 +21,12 @@ from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
 from huggingface_hub import scan_cache_dir
-from peft import AutoPeftModelForCausalLM, LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from peft import (
+    AutoPeftModelForCausalLM,
+    LoraConfig,
+    get_peft_model,
+    prepare_model_for_kbit_training,
+)
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
@@ -135,12 +140,14 @@ class OtherArguments:
         metadata={"help": "If to train the model with qLoRa"},
     )
     bnb_4bit_quant_type: Optional[str] = field(
-        default='nf4',
+        default="nf4",
         metadata={"help": "quantization data type options are {'nf4', 'fp4'}, by default it is nf4"},
     )
     use_double_quant: bool = field(
         default=True,
-        metadata={"help": "This flag is used for nested quantization where the quantization constants from the first quantization are quantized again"},
+        metadata={
+            "help": "This flag is used for nested quantization where the quantization constants from the first quantization are quantized again"
+        },
     )
     qlora_bit_length: int = field(
         default=4,
@@ -607,7 +614,9 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             quantization_config=bnb_config,
         )
 
-        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=training_arguments.gradient_checkpointing)
+        model = prepare_model_for_kbit_training(
+            model, use_gradient_checkpointing=training_arguments.gradient_checkpointing
+        )
     else:
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
@@ -678,11 +687,6 @@ def train(
     other_arguments: OtherArguments,
     run: Optional[mlfoundry.MlFoundryRun] = None,
 ):
-    if training_arguments.local_rank <= 0:
-        if other_arguments.cleanup_output_dir_on_start and os.path.exists(training_arguments.output_dir):
-            logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {training_arguments.output_dir}")
-            shutil.rmtree(training_arguments.output_dir)
-
     if other_arguments.use_lora or other_arguments.use_qlora:
         other_arguments.lora_config = LoraConfig(**json.loads(other_arguments.lora_config))
 
