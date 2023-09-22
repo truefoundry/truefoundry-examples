@@ -334,7 +334,7 @@ def log_model_as_pipeline(
 
 def filter_trainer_args_for_logging(trainer_args: TrainingArguments, other_args: OtherArguments) -> Dict[str, Any]:
     # TODO (chiragjn): Update this list
-    argumets = {
+    arguments = {
         "num_train_epochs": trainer_args.num_train_epochs,
         "per_device_train_batch_size": trainer_args.per_device_train_batch_size,
         "learning_rate": trainer_args.learning_rate,
@@ -352,7 +352,7 @@ def filter_trainer_args_for_logging(trainer_args: TrainingArguments, other_args:
                 "use_double_quant": other_args.use_double_quant,
                 "qlora_bit_length": other_args.qlora_bit_length,
             }
-            argumets.update(qlora_args)
+            arguments.update(qlora_args)
         
         lora_args = {
         "use_lora": other_args.use_lora,
@@ -362,9 +362,9 @@ def filter_trainer_args_for_logging(trainer_args: TrainingArguments, other_args:
         "lora_dropout": other_args.lora_dropout,
         "lora_bias": other_args.lora_bias,
         }
-        argumets.update(lora_args)
+        arguments.update(lora_args)
     
-    return argumets
+    return arguments
 
 
 class Callback(TrainerCallback):
