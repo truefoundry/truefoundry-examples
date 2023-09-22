@@ -604,10 +604,10 @@ def setup(training_arguments: HFTrainingArguments):
 def get_model(model_source: str, training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     # TODO (chiragjn): Should we pass a torch_dtype here?
     logger.info("Loading model...")
+    no_of_gpus = torch.cuda.device_count()
     if other_arguments.use_qlora:
         if training_arguments.deepspeed:
             raise ValueError("deepspeed is incompatible with qlora fine-tuning please try fine-tuning without deepspeed")
-        no_of_gpus = torch.cuda.device_count()
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=other_arguments.qlora_bit_length == 4,
             load_in_8bit=other_arguments.qlora_bit_length == 8,
@@ -633,6 +633,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             trust_remote_code=True,
             use_cache=False if training_arguments.gradient_checkpointing else True,
             torch_dtype=get_torch_dtype(training_arguments),
+            device_map='auto' if no_of_gpus > 1 else None,
         )
 
     if training_arguments.gradient_checkpointing:
