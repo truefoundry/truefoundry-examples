@@ -51,8 +51,6 @@ from transformers.utils import (
 from transformers.utils import logging as hf_logging_utils
 
 # TODO (chiragjn):
-#   - Test resume from checkpoint for both full and lora
-#   - Add support for 8 bit and 4 bit QLora
 #   - Test support for fp16 on older GPUs
 #   - Write a script to automatically capture gpu and memory metrics with different configurations
 #   - Test and fix Deepspeed weight gathering bugs during checkpointing if any
@@ -74,6 +72,8 @@ DEFAULT_PAD_TOKEN = "[PAD]"
 DEFAULT_EOS_TOKEN = "</s>"
 DEFAULT_BOS_TOKEN = "<s>"
 DEFAULT_UNK_TOKEN = "<unk>"
+PROMPT_KEY = "prompt"
+COMPLETION_KEY = "completion"
 
 
 @dataclass
@@ -168,6 +168,10 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
+
+
+class DataValidationException(Exception):
+    pass
 
 
 def get_torch_dtype(training_arguments: HFTrainingArguments):
@@ -421,8 +425,8 @@ class DatasetBuilder:
         return tokenized
 
     def construct_dataset(self, input_batch):
-        tokenized_input_ids = self.batch_tokenize(input_batch["prompt"])
-        tokenized_labels = self.batch_tokenize(input_batch["completion"])
+        tokenized_input_ids = self.batch_tokenize(input_batch[PROMPT_KEY])
+        tokenized_labels = self.batch_tokenize(input_batch[COMPLETION_KEY])
         return {"input_ids": tokenized_input_ids, "labels": tokenized_labels}
 
 
@@ -435,12 +439,12 @@ class CausalDatasetBuilder(DatasetBuilder):
 
     def construct_dataset(self, input_batch):
         labels = []
-        for prompt, completion in zip(input_batch["prompt"], input_batch["completion"]):
+        for prompt, completion in zip(input_batch[PROMPT_KEY], input_batch["completion"]):
             labels.append(prompt + "\n" + completion + self.tokenizer.eos_token)
         input_ids = [val.squeeze() for val in self.batch_tokenize(labels)]
         labels = copy.deepcopy(input_ids)
         if not self.train_on_prompt:
-            tokenized_prompts = self.batch_tokenize(input_batch["prompt"])
+            tokenized_prompts = self.batch_tokenize(input_batch[COMPLETION_KEY])
             prompt_lens = [val.shape[1] for val in tokenized_prompts]
             for label, source_len in zip(labels, prompt_lens):
                 label[:source_len] = IGNORE_INDEX
@@ -521,15 +525,33 @@ def load_data(path, max_num_samples: Optional[int] = None):
         else:
             logger.info(f"Loading data from link: {path}")
             lines = _read_lines_from_cloudfile(path)
-        for line in lines:
+        for line_no, line in enumerate(lines, start=1):
             if n > 0 and count >= n:
                 break
+            if not line.strip():
+                continue
             try:
-                json_object = json.loads(line)
-            except json.decoder.JSONDecodeError:
-                pass
+                datapoint_dict = json.loads(line)
+            except json.decoder.JSONDecodeError as je:
+                raise DataValidationException(
+                    f"Failed to parse json line on line number {line_no}. Line: {line[:150]}..."
+                ) from je
             else:
-                data.append(json_object)
+                for key in (PROMPT_KEY, COMPLETION_KEY):
+                    if key not in datapoint_dict:
+                        raise DataValidationException(
+                            f"Required key `{key}` is missing from json line on line number {line_no}. Line: {line[:150]}..."
+                        )
+                    if not isinstance(datapoint_dict[key], str) or not datapoint_dict[key]:
+                        raise DataValidationException(
+                            f"Value for `{key}` is not a non-empty string on line on line number {line_no}. Line: {line[:150]}..."
+                        )
+
+                datapoint_dict = {
+                    PROMPT_KEY: datapoint_dict[PROMPT_KEY],
+                    COMPLETION_KEY: datapoint_dict[COMPLETION_KEY],
+                }
+                data.append(datapoint_dict)
                 count += 1
     return data
 
@@ -561,7 +583,7 @@ def build_dataset(train_data, eval_data, tokenizer, max_length, training_argumen
         dataset_dict = DatasetDict(train=Dataset.from_list(train_data), eval=Dataset.from_list(eval_data))
         dataset_dict = dataset_dict.map(
             builder.construct_dataset,
-            remove_columns=["prompt", "completion"],
+            remove_columns=[PROMPT_KEY, COMPLETION_KEY],
             batched=True,
             batch_size=32,
         )
