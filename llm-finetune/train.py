@@ -123,11 +123,6 @@ class OtherArguments:
         default=False,
         metadata={"help": "If to train the model with LoRa"},
     )
-    #  "c_attn", "down_proj", "gate_proj", "up_proj", "query_key_value" "dense", "dense_h_to_4h", "dense_4h_to_h",
-    lora_config: str = field(
-        default=None,
-        metadata={"help": "Json encoded string containing config for lora training"},
-    )
     use_qlora: bool = field(
         default=False,
         metadata={"help": "If to train the model with qLoRa"},
@@ -161,6 +156,26 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
+    lora_r: int = field(
+        default=8,
+        metadata={"help": "r value for lora config"},
+    )
+    lora_alpha: int = field(
+        default=32,
+        metadata={"help": "value of alpha for lora config"},
+    )
+    lora_target_modules: str = field(
+        default="auto",
+        metadata={"help": "The names of the modules to apply Lora to"},
+    )
+    lora_dropout: int = field(
+        default=0.05,
+        metadata={"help": "The dropout probability for Lora layers."},
+    )
+    lora_bias: str = field(
+        default="none",
+        metadata={"help": "Bias type for Lora. Can be 'none', 'all' or 'lora_only'. If 'all' or 'lora_only', the corresponding biases will be updated during training."},
+    )
 
 
 def get_torch_dtype(training_arguments: HFTrainingArguments):
@@ -184,7 +199,7 @@ def find_all_linear_names(model):
     if "lm_head" in lora_module_names:  # needed for 16-bit
         lora_module_names.remove("lm_head")
     if len(list(lora_module_names)) == 0:
-        return None
+        return ValueError("Cannot automatically find target modules for LoRa please provide --lora_target_modules explicitly")
     return list(lora_module_names)
 
 
@@ -317,9 +332,9 @@ def log_model_as_pipeline(
     )
 
 
-def filter_trainer_args_for_logging(trainer_args: TrainingArguments) -> Dict[str, Any]:
+def filter_trainer_args_for_logging(trainer_args: TrainingArguments, other_args: OtherArguments) -> Dict[str, Any]:
     # TODO (chiragjn): Update this list
-    return {
+    argumets = {
         "num_train_epochs": trainer_args.num_train_epochs,
         "per_device_train_batch_size": trainer_args.per_device_train_batch_size,
         "learning_rate": trainer_args.learning_rate,
@@ -329,6 +344,27 @@ def filter_trainer_args_for_logging(trainer_args: TrainingArguments) -> Dict[str
         "gradient_accumulation_steps": trainer_args.gradient_accumulation_steps,
         "warmup_ratio": trainer_args.warmup_ratio,
     }
+    if other_args.use_lora:
+        if other_args.use_qlora:
+            qlora_args = {
+                "use_qlora": other_args.use_qlora,
+                "bnb_4bit_quant_type": other_args.bnb_4bit_quant_type,
+                "use_double_quant": other_args.use_double_quant,
+                "qlora_bit_length": other_args.qlora_bit_length,
+            }
+            argumets.update(qlora_args)
+        
+        lora_args = {
+        "use_lora": other_args.use_lora,
+        "lora_r": other_args.lora_r,
+        "lora_alpha": other_args.lora_alpha,
+        "lora_target_modules": other_args.lora_target_modules,
+        "lora_dropout": other_args.lora_dropout,
+        "lora_bias": other_args.lora_bias,
+        }
+        argumets.update(lora_args)
+    
+    return argumets
 
 
 class Callback(TrainerCallback):
@@ -739,20 +775,22 @@ def train(
 
     model = get_model(model_source, training_arguments=training_arguments, other_arguments=other_arguments)
     if other_arguments.use_lora or other_arguments.use_qlora:
-        if other_arguments.lora_config is None:
-            lora_config = LoraConfig(
-            **dict(
-                r=8,
-                lora_alpha=32,
-                target_modules=find_all_linear_names(model),
-                lora_dropout=0.05,
-                bias="none",
-                task_type="CAUSAL_LM",
-            ))
+        if other_arguments.lora_target_modules == "auto":
+            modules = find_all_linear_names(model)
         else:
-            lora_config = LoraConfig(**json.loads(other_arguments.lora_config))
-            
-        other_arguments.lora_config = lora_config
+            modules = other_arguments.lora_target_modules
+        logger.info(f"Modules targeted for lora are {modules}")
+
+        other_arguments.lora_config = LoraConfig(
+        **dict(
+            r=other_arguments.lora_r,
+            lora_alpha=other_arguments.lora_alpha,
+            target_modules=modules,
+            lora_dropout=other_arguments.lora_dropout,
+            bias=other_arguments.lora_bias,
+            task_type="CAUSAL_LM",
+        ))
+    
     if num_new_tokens > 0:
         logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
