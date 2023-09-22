@@ -743,7 +743,7 @@ def train(
             lora_config = LoraConfig(
             **dict(
                 r=8,
-                lora_alpha=121,
+                lora_alpha=32,
                 target_modules=find_all_linear_names(model),
                 lora_dropout=0.05,
                 bias="none",
