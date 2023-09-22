@@ -778,7 +778,7 @@ def train(
         if other_arguments.lora_target_modules == "auto":
             modules = find_all_linear_names(model)
         else:
-            modules = other_arguments.lora_target_modules
+            modules = json.loads(other_arguments.lora_target_modules)
         logger.info(f"Modules targeted for lora are {modules}")
 
         other_arguments.lora_config = LoraConfig(
@@ -908,7 +908,7 @@ def main():
 
     if training_arguments.local_rank <= 0 and run:
         run.log_params(vars(other_arguments), flatten_params=True)
-        run.log_params(filter_trainer_args_for_logging(training_arguments), flatten_params=True)
+        run.log_params(filter_trainer_args_for_logging(training_arguments, other_arguments), flatten_params=True)
         # TODO: there are 110 params in training_arguments, we do not need to log all of them.
         # run.log_params(training_arguments.to_sanitized_dict(), flatten_params=True)
 
