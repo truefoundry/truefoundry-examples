@@ -199,7 +199,7 @@ def find_all_linear_names(model):
     if "lm_head" in lora_module_names:  # needed for 16-bit
         lora_module_names.remove("lm_head")
     if len(list(lora_module_names)) == 0:
-        return ValueError("Cannot automatically find target modules for LoRa please provide --lora_target_modules explicitly")
+        raise ValueError("Cannot automatically find target modules for LoRa please provide --lora_target_modules explicitly")
     return list(lora_module_names)
 
 
