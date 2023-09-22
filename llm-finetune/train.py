@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+import bitsandbytes as bnb
 import mlfoundry
 import numpy as np
 import torch
@@ -27,6 +28,7 @@ from peft import (
     get_peft_model,
     prepare_model_for_kbit_training,
 )
+from peft.tuners.lora import LoraLayer
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
@@ -123,16 +125,7 @@ class OtherArguments:
     )
     #  "c_attn", "down_proj", "gate_proj", "up_proj", "query_key_value" "dense", "dense_h_to_4h", "dense_4h_to_h",
     lora_config: str = field(
-        default=json.dumps(
-            dict(
-                r=8,
-                lora_alpha=32,
-                target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
-                lora_dropout=0.05,
-                bias="none",
-                task_type="CAUSAL_LM",
-            )
-        ),
+        default=None,
         metadata={"help": "Json encoded string containing config for lora training"},
     )
     use_qlora: bool = field(
@@ -180,6 +173,19 @@ def get_torch_dtype(training_arguments: HFTrainingArguments):
 
 
 # --- Model checkpointing and logging utils ---
+
+def find_all_linear_names(model):
+    lora_module_names = set()
+    for name, module in model.named_modules():
+        if isinstance(module, bnb.nn.Linear4bit):
+            names = name.split(".")
+            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+
+    if "lm_head" in lora_module_names:  # needed for 16-bit
+        lora_module_names.remove("lm_head")
+    if len(list(lora_module_names)) == 0:
+        return None
+    return list(lora_module_names)
 
 
 def resolve_checkpoint_artifact_name(
@@ -599,6 +605,9 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
     # TODO (chiragjn): Should we pass a torch_dtype here?
     logger.info("Loading model...")
     if other_arguments.use_qlora:
+        if training_arguments.deepspeed:
+            raise ValueError("deepspeed is incompatible with qlora fine-tuning please try fine-tuning without deepspeed")
+        no_of_gpus = torch.cuda.device_count()
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=other_arguments.qlora_bit_length == 4,
             load_in_8bit=other_arguments.qlora_bit_length == 8,
@@ -612,6 +621,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             use_cache=False if training_arguments.gradient_checkpointing else True,
             torch_dtype=get_torch_dtype(training_arguments),
             quantization_config=bnb_config,
+            device_map='auto' if no_of_gpus > 1 else None,
         )
 
         model = prepare_model_for_kbit_training(
@@ -687,8 +697,6 @@ def train(
     other_arguments: OtherArguments,
     run: Optional[mlfoundry.MlFoundryRun] = None,
 ):
-    if other_arguments.use_lora or other_arguments.use_qlora:
-        other_arguments.lora_config = LoraConfig(**json.loads(other_arguments.lora_config))
 
     set_seed(training_arguments.seed)
 
@@ -729,6 +737,21 @@ def train(
         torch.distributed.barrier()
 
     model = get_model(model_source, training_arguments=training_arguments, other_arguments=other_arguments)
+    if other_arguments.use_lora or other_arguments.use_qlora:
+        if other_arguments.lora_config is None:
+            lora_config = LoraConfig(
+            **dict(
+                r=8,
+                lora_alpha=121,
+                target_modules=find_all_linear_names(model),
+                lora_dropout=0.05,
+                bias="none",
+                task_type="CAUSAL_LM",
+            ))
+        else:
+            lora_config = LoraConfig(**json.loads(other_arguments.lora_config))
+            
+        other_arguments.lora_config = lora_config
     if num_new_tokens > 0:
         logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
@@ -739,10 +762,17 @@ def train(
         logger.info("Applying peft config ...")
         other_arguments.lora_config.inference_mode = False
         model = get_peft_model(model, other_arguments.lora_config)
-        if training_arguments.bf16:
-            model.to(torch.bfloat16)
-        elif training_arguments.fp16:
-            model.to(torch.float16)
+
+        for name, module in model.named_modules():
+            if isinstance(module, LoraLayer):
+                if training_arguments.bf16:
+                    module = module.to(torch.bfloat16)
+            if "norm" in name:
+                module = module.to(torch.float32)
+            if "lm_head" in name or "embed_tokens" in name:
+                if hasattr(module, "weight"):
+                    if training_arguments.bf16 and module.weight.dtype == torch.float32:
+                        module = module.to(torch.bfloat16)
         if training_arguments.gradient_checkpointing:
             model.enable_input_require_grads()
 
