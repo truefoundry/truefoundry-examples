@@ -439,12 +439,12 @@ class CausalDatasetBuilder(DatasetBuilder):
 
     def construct_dataset(self, input_batch):
         labels = []
-        for prompt, completion in zip(input_batch[PROMPT_KEY], input_batch["completion"]):
+        for prompt, completion in zip(input_batch[PROMPT_KEY], input_batch[COMPLETION_KEY]):
             labels.append(prompt + "\n" + completion + self.tokenizer.eos_token)
         input_ids = [val.squeeze() for val in self.batch_tokenize(labels)]
         labels = copy.deepcopy(input_ids)
         if not self.train_on_prompt:
-            tokenized_prompts = self.batch_tokenize(input_batch[COMPLETION_KEY])
+            tokenized_prompts = self.batch_tokenize(input_batch[PROMPT_KEY])
             prompt_lens = [val.shape[1] for val in tokenized_prompts]
             for label, source_len in zip(labels, prompt_lens):
                 label[:source_len] = IGNORE_INDEX
