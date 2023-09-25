@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+import bitsandbytes as bnb
 import mlfoundry
 import numpy as np
 import torch
@@ -27,6 +28,7 @@ from peft import (
     get_peft_model,
     prepare_model_for_kbit_training,
 )
+from peft.tuners.lora import LoraLayer
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoConfig,
@@ -121,20 +123,6 @@ class OtherArguments:
         default=False,
         metadata={"help": "If to train the model with LoRa"},
     )
-    #  "c_attn", "down_proj", "gate_proj", "up_proj", "query_key_value" "dense", "dense_h_to_4h", "dense_4h_to_h",
-    lora_config: str = field(
-        default=json.dumps(
-            dict(
-                r=8,
-                lora_alpha=32,
-                target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
-                lora_dropout=0.05,
-                bias="none",
-                task_type="CAUSAL_LM",
-            )
-        ),
-        metadata={"help": "Json encoded string containing config for lora training"},
-    )
     use_qlora: bool = field(
         default=False,
         metadata={"help": "If to train the model with qLoRa"},
@@ -168,6 +156,28 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
+    lora_r: int = field(
+        default=8,
+        metadata={"help": "r value for lora config"},
+    )
+    lora_alpha: int = field(
+        default=32,
+        metadata={"help": "value of alpha for lora config"},
+    )
+    lora_target_modules: str = field(
+        default="auto",
+        metadata={"help": "The names of the modules to apply Lora to"},
+    )
+    lora_dropout: int = field(
+        default=0.05,
+        metadata={"help": "The dropout probability for Lora layers."},
+    )
+    lora_bias: str = field(
+        default="none",
+        metadata={
+            "help": "Bias type for Lora. Can be 'none', 'all' or 'lora_only'. If 'all' or 'lora_only', the corresponding biases will be updated during training."
+        },
+    )
 
 
 class DataValidationException(Exception):
@@ -184,6 +194,22 @@ def get_torch_dtype(training_arguments: HFTrainingArguments):
 
 
 # --- Model checkpointing and logging utils ---
+
+
+def find_all_linear_names(model):
+    lora_module_names = set()
+    for name, module in model.named_modules():
+        if isinstance(module, bnb.nn.Linear4bit):
+            names = name.split(".")
+            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+
+    if "lm_head" in lora_module_names:  # needed for 16-bit
+        lora_module_names.remove("lm_head")
+    if len(list(lora_module_names)) == 0:
+        raise ValueError(
+            "Cannot automatically find target modules for LoRa please provide --lora_target_modules explicitly"
+        )
+    return list(lora_module_names)
 
 
 def resolve_checkpoint_artifact_name(
@@ -315,9 +341,9 @@ def log_model_as_pipeline(
     )
 
 
-def filter_trainer_args_for_logging(trainer_args: TrainingArguments) -> Dict[str, Any]:
+def filter_trainer_args_for_logging(trainer_args: TrainingArguments, other_args: OtherArguments) -> Dict[str, Any]:
     # TODO (chiragjn): Update this list
-    return {
+    arguments = {
         "num_train_epochs": trainer_args.num_train_epochs,
         "per_device_train_batch_size": trainer_args.per_device_train_batch_size,
         "learning_rate": trainer_args.learning_rate,
@@ -327,6 +353,27 @@ def filter_trainer_args_for_logging(trainer_args: TrainingArguments) -> Dict[str
         "gradient_accumulation_steps": trainer_args.gradient_accumulation_steps,
         "warmup_ratio": trainer_args.warmup_ratio,
     }
+    if other_args.use_lora:
+        if other_args.use_qlora:
+            qlora_args = {
+                "use_qlora": other_args.use_qlora,
+                "bnb_4bit_quant_type": other_args.bnb_4bit_quant_type,
+                "use_double_quant": other_args.use_double_quant,
+                "qlora_bit_length": other_args.qlora_bit_length,
+            }
+            arguments.update(qlora_args)
+
+        lora_args = {
+            "use_lora": other_args.use_lora,
+            "lora_r": other_args.lora_r,
+            "lora_alpha": other_args.lora_alpha,
+            "lora_target_modules": other_args.lora_target_modules,
+            "lora_dropout": other_args.lora_dropout,
+            "lora_bias": other_args.lora_bias,
+        }
+        arguments.update(lora_args)
+
+    return arguments
 
 
 class Callback(TrainerCallback):
@@ -620,7 +667,12 @@ def setup(training_arguments: HFTrainingArguments):
 def get_model(model_source: str, training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     # TODO (chiragjn): Should we pass a torch_dtype here?
     logger.info("Loading model...")
+    no_of_gpus = torch.cuda.device_count()
     if other_arguments.use_qlora:
+        if training_arguments.deepspeed:
+            raise ValueError(
+                "deepspeed is incompatible with qlora fine-tuning please try fine-tuning without deepspeed"
+            )
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=other_arguments.qlora_bit_length == 4,
             load_in_8bit=other_arguments.qlora_bit_length == 8,
@@ -634,6 +686,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             use_cache=False if training_arguments.gradient_checkpointing else True,
             torch_dtype=get_torch_dtype(training_arguments),
             quantization_config=bnb_config,
+            device_map="auto" if no_of_gpus > 1 else None,
         )
 
         model = prepare_model_for_kbit_training(
@@ -645,6 +698,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             trust_remote_code=True,
             use_cache=False if training_arguments.gradient_checkpointing else True,
             torch_dtype=get_torch_dtype(training_arguments),
+            device_map="auto" if no_of_gpus > 1 else None,
         )
 
     if training_arguments.gradient_checkpointing:
@@ -709,9 +763,6 @@ def train(
     other_arguments: OtherArguments,
     run: Optional[mlfoundry.MlFoundryRun] = None,
 ):
-    if other_arguments.use_lora or other_arguments.use_qlora:
-        other_arguments.lora_config = LoraConfig(**json.loads(other_arguments.lora_config))
-
     set_seed(training_arguments.seed)
 
     if training_arguments.world_size > 1 and training_arguments.local_rank > 0:
@@ -751,6 +802,24 @@ def train(
         torch.distributed.barrier()
 
     model = get_model(model_source, training_arguments=training_arguments, other_arguments=other_arguments)
+    if other_arguments.use_lora or other_arguments.use_qlora:
+        if other_arguments.lora_target_modules == "auto":
+            modules = find_all_linear_names(model)
+        else:
+            modules = json.loads(other_arguments.lora_target_modules)
+        logger.info(f"Modules targeted for lora are {modules}")
+
+        other_arguments.lora_config = LoraConfig(
+            **dict(
+                r=other_arguments.lora_r,
+                lora_alpha=other_arguments.lora_alpha,
+                target_modules=modules,
+                lora_dropout=other_arguments.lora_dropout,
+                bias=other_arguments.lora_bias,
+                task_type="CAUSAL_LM",
+            )
+        )
+
     if num_new_tokens > 0:
         logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
@@ -761,10 +830,17 @@ def train(
         logger.info("Applying peft config ...")
         other_arguments.lora_config.inference_mode = False
         model = get_peft_model(model, other_arguments.lora_config)
-        if training_arguments.bf16:
-            model.to(torch.bfloat16)
-        elif training_arguments.fp16:
-            model.to(torch.float16)
+
+        for name, module in model.named_modules():
+            if isinstance(module, LoraLayer):
+                if training_arguments.bf16:
+                    module = module.to(torch.bfloat16)
+            if "norm" in name:
+                module = module.to(torch.float32)
+            if "lm_head" in name or "embed_tokens" in name:
+                if hasattr(module, "weight"):
+                    if training_arguments.bf16 and module.weight.dtype == torch.float32:
+                        module = module.to(torch.bfloat16)
         if training_arguments.gradient_checkpointing:
             model.enable_input_require_grads()
 
@@ -861,7 +937,7 @@ def main():
 
     if training_arguments.local_rank <= 0 and run:
         run.log_params(vars(other_arguments), flatten_params=True)
-        run.log_params(filter_trainer_args_for_logging(training_arguments), flatten_params=True)
+        run.log_params(filter_trainer_args_for_logging(training_arguments, other_arguments), flatten_params=True)
         # TODO: there are 110 params in training_arguments, we do not need to log all of them.
         # run.log_params(training_arguments.to_sanitized_dict(), flatten_params=True)
 
