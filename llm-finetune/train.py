@@ -168,7 +168,7 @@ class OtherArguments:
         default="auto",
         metadata={"help": "The names of the modules to apply Lora to"},
     )
-    lora_dropout: int = field(
+    lora_dropout: float = field(
         default=0.05,
         metadata={"help": "The dropout probability for Lora layers."},
     )
