@@ -586,10 +586,12 @@ def load_data(path, max_num_samples: Optional[int] = None):
             else:
                 for key in (PROMPT_KEY, COMPLETION_KEY):
                     if key not in datapoint_dict:
+                        continue
                         raise DataValidationException(
                             f"Required key `{key}` is missing from json line on line number {line_no}. Line: {line[:150]}..."
                         )
                     if not isinstance(datapoint_dict[key], str) or not datapoint_dict[key]:
+                        continue
                         raise DataValidationException(
                             f"Value for `{key}` is not a non-empty string on line on line number {line_no}. Line: {line[:150]}..."
                         )
