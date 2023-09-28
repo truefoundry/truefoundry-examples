@@ -1,7 +1,15 @@
 import argparse
 import logging
 
-from servicefoundry import Build, Port, PythonBuild, Resources, Service
+from servicefoundry import (
+    Build,
+    GPUType,
+    NodeSelector,
+    Port,
+    PythonBuild,
+    Resources,
+    Service,
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,12 +33,14 @@ service = Service(
         )
     ],
     resources=Resources(
-        cpu_request=8,
-        cpu_limit=8,
-        memory_request=70000,
-        memory_limit=70000,
-        ephemeral_storage_request=70000,
-        ephemeral_storage_limit=70000,
+        cpu_request=4,
+        cpu_limit=4,
+        memory_request=35000,
+        memory_limit=35000,
+        ephemeral_storage_request=35000,
+        ephemeral_storage_limit=35000,
+        gpu_count=1,
+        node=NodeSelector(gpu_type=GPUType.A100_40GB),
     ),
     env={"UVICORN_WEB_CONCURRENCY": "1", "ENVIRONMENT": "dev"},
 )
