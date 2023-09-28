@@ -1,6 +1,6 @@
 import requests
 
-url = "https://test-llama-70b-4bit-mitanshu-llm.demo2.truefoundry.tech/generate"
+url = "<url-here>/generate"
 
 payload = {
     "inputs": "My name is Olivier and I",
