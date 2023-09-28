@@ -1,4 +1,4 @@
-# Model deployment using Fast API Service
+# Model deployment using Fast API as a Service
 This folder contains script to deploy any text generation model as a FastAPI service
 
 ## Model selection
