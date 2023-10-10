@@ -178,6 +178,9 @@ class OtherArguments:
             "help": "Bias type for Lora. Can be 'none', 'all' or 'lora_only'. If 'all' or 'lora_only', the corresponding biases will be updated during training."
         },
     )
+    tfy_run_name: Optional[str] = field(
+        default=None, metadata={"help": "Run name for the job to save the metrics and "}
+    )
 
 
 class DataValidationException(Exception):
@@ -933,7 +936,10 @@ def main():
     run = None
     if training_arguments.local_rank <= 0 and other_arguments.report_to_mlfoundry:
         mlfoundry_client = mlfoundry.get_client()
-        run = mlfoundry_client.create_run(ml_repo=other_arguments.ml_repo, run_name=f"finetune-{timestamp}")
+        run = mlfoundry_client.create_run(
+            ml_repo=other_arguments.ml_repo,
+            run_name=other_arguments.tfy_run_name if other_arguments.tfy_run_name else f"finetune-{timestamp}",
+        )
 
     if training_arguments.local_rank <= 0 and run:
         run.log_params(vars(other_arguments), flatten_params=True)
