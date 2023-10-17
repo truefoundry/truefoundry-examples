@@ -30,11 +30,6 @@ COMPLETION_KEY = "completion"
 
 
 @dataclass
-class HFTrainingArguments(TrainingArguments):
-    pass
-
-
-@dataclass
 class Args:
     model_id: str = field(metadata={"help": "Huggingface hub model ID"})
     ml_repo: str = field(metadata={"help": "ML Repo to put the model to"})
