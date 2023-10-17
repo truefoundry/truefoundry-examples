@@ -332,11 +332,14 @@ def log_model_as_pipeline(
         torch_dtype=get_torch_dtype(training_arguments=training_arguments),
         device_map="auto",  # We load on GPUs if available because we can be low on regular memory
     )
+    metadata = training_arguments.to_sanitized_dict()
+    metadata.update({"huggingface_model_url": f"https://huggingface.co/{hf_hub_model_id}"})
+
     run.log_model(
         name=model_name,
         model=p,
         framework="transformers",
-        metadata=training_arguments.to_sanitized_dict(),
+        metadata=metadata,
         additional_files=additional_files,
     )
 
