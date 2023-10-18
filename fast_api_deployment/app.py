@@ -1,10 +1,13 @@
+import os
+
 import torch
 from fastapi import FastAPI
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from uvicorn.workers import UvicornWorker
 
-model_name_or_path = "TheBloke/Llama-2-70B-chat-GPTQ"
+model_name_or_path = os.environ["MODEL_NAME"]
+
 model = AutoModelForCausalLM.from_pretrained(
     model_name_or_path, device_map="auto", trust_remote_code=False, revision="main"
 )
