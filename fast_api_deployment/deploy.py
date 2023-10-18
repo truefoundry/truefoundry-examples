@@ -42,6 +42,6 @@ service = Service(
         gpu_count=1,
         node=NodeSelector(gpu_type=GPUType.A100_40GB),
     ),
-    env={"UVICORN_WEB_CONCURRENCY": "1", "ENVIRONMENT": "dev"},
+    env={"UVICORN_WEB_CONCURRENCY": "1", "ENVIRONMENT": "dev", "MODEL_NAME": "TheBloke/Llama-2-70B-chat-GPTQ"},
 )
 service.deploy(workspace_fqn=args.workspace_fqn)
