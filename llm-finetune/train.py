@@ -294,14 +294,15 @@ def cleanup_checkpoints(
 
 
 def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    # TODO (chiragjn): We do not want to offload to cpu or disk here!
-    # This is a known issue. We need to very careful to make sure eveyrthing fits within GPU memory
-    for _ in range(5):  # Yes, this is stupid but necessary
+    # TODO (chiragjn): We do not want anything to be offloaded to cpu or disk here!
+    # This is a known issue - https://github.com/huggingface/peft/issues/868
+    for _ in range(3):  # Yes, this is stupid but necessary
         gc.collect()
         time.sleep(5)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
+    check_if_model_will_fit_only_with_gpus(training_arguments=training_arguments, other_arguments=other_arguments)
     logger.info("Merging lora adapter into main model")
     model = AutoPeftModelForCausalLM.from_pretrained(
         training_arguments.output_dir,
@@ -309,7 +310,6 @@ def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_argumen
         torch_dtype=get_torch_dtype(training_arguments),
         device_map="sequential",
     )
-    # TODO (chiragjn): Add a assertion here to check device map does not have anything offloaded
     model = model.merge_and_unload()
     model.save_pretrained(training_arguments.output_dir, safe_serialization=True)
     for filename in ["adapter_config.json", "adapter_model.safetensors", "adapter_model.bin"]:
@@ -814,9 +814,9 @@ def check_if_model_will_fit_only_with_gpus(
     device_map = infer_auto_device_map(model, dtype=get_torch_dtype(training_arguments))
     logger.info(f"Inferred device_map for auto settings: {device_map}")
     if any(not isinstance(v, int) for v in device_map.values()):
-        raise ValueError(
-            "For lora/qlora the model must entirely fit on gpus without any kind of offloading to prevent bugs with saving checkpoint! "
-            "With the current configuration model is being offloaded to cpu/disk."
+        raise RuntimeError(
+            "For lora/qlora the model must entirely fit on gpus without any kind of offloading to prevent bugs with merging! "
+            "With the current configuration model is being offloaded to cpu/disk. This causes incorrect model saving. See https://github.com/huggingface/peft/issues/868"
         )
 
 
@@ -1052,9 +1052,6 @@ def main():
 
     if training_arguments.local_rank <= 0:
         if other_arguments.use_lora or other_arguments.use_qlora:
-            check_if_model_will_fit_only_with_gpus(
-                training_arguments=training_arguments, other_arguments=other_arguments
-            )
             merge_adapters_if_any(training_arguments=training_arguments, other_arguments=other_arguments)
 
     if training_arguments.local_rank <= 0 and run:
