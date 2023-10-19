@@ -303,13 +303,14 @@ def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_argumen
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
     check_if_model_will_fit_only_with_gpus(training_arguments=training_arguments, other_arguments=other_arguments)
-    logger.info("Merging lora adapter into main model")
+    logger.info("Loading model and lora layers for merging ...")
     model = AutoPeftModelForCausalLM.from_pretrained(
         training_arguments.output_dir,
         low_cpu_mem_usage=True,
         torch_dtype=get_torch_dtype(training_arguments),
         device_map="sequential",
     )
+    logger.info("Merging lora adapter into main model. This can take a while ...")
     model = model.merge_and_unload()
     model.save_pretrained(training_arguments.output_dir, safe_serialization=True)
     for filename in ["adapter_config.json", "adapter_model.safetensors", "adapter_model.bin"]:
@@ -321,7 +322,7 @@ def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_argumen
 def log_model_to_mlfoundry(
     run: mlfoundry.MlFoundryRun, training_arguments: HFTrainingArguments, model_name: str, hf_hub_model_id: str
 ):
-    logger.info("Saving Model...")
+    logger.info("Uploading Model...")
     cleanup_checkpoints(training_arguments=training_arguments)
 
     hf_cache_info = scan_cache_dir()
@@ -456,6 +457,7 @@ class Callback(TrainerCallback):
         description = None
         if TFY_INTERNAL_JOB_NAME:
             description = f"Checkpoint from finetuning job={TFY_INTERNAL_JOB_NAME} run={TFY_INTERNAL_JOB_RUN_NAME}"
+        logger.info(f"Uploading checkpoint {ckpt_dir} ...")
         self._run.log_artifact(
             name=self._checkpoint_artifact_name,
             artifact_paths=[(artifact_path,)],
