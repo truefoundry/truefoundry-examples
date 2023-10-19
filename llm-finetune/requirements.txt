@@ -1,3 +1,4 @@
+torch==2.0.1
 cloud-files==4.15.2
 mlfoundry==0.9.8
 transformers[accelerate,datasets,deepspeed,safetensors,sentencepiece,tokenizers]==4.33.2
@@ -7,3 +8,5 @@ bitsandbytes==0.41.1
 xformers==0.0.20
 ninja==1.11.1
 packaging==23.1
+einops==0.7.0
+snowflake-connector-python[pandas]==3.3.1
