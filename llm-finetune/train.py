@@ -690,10 +690,15 @@ def setup(training_arguments: HFTrainingArguments):
     hf_logging_utils.add_handler(handler)
 
 
-def find_all_linear_names(model):
+def find_all_linear_names(model, other_arguments: OtherArguments):
     lora_module_names = set()
+    target_cls_type = torch.nn.Linear
+    if other_arguments.use_qlora and other_arguments.qlora_bit_length == 8:
+        target_cls_type = bnb.nn.Linear8bitLt
+    elif other_arguments.use_qlora and other_arguments.qlora_bit_length == 4:
+        target_cls_type = bnb.nn.Linear4bit
     for name, module in model.named_modules():
-        if isinstance(module, bnb.nn.Linear4bit):
+        if isinstance(module, target_cls_type):
             names = name.split(".")
             lora_module_names.add(names[0] if len(names) == 1 else names[-1])
 
@@ -869,7 +874,7 @@ def train(
     model = get_model(model_source, training_arguments=training_arguments, other_arguments=other_arguments)
     if other_arguments.use_lora or other_arguments.use_qlora:
         if other_arguments.lora_target_modules == "auto":
-            modules = find_all_linear_names(model)
+            modules = find_all_linear_names(model, other_arguments=other_arguments)
         else:
             modules = json.loads(other_arguments.lora_target_modules)
         logger.info(f"Modules targeted for lora are {modules}")
