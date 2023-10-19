@@ -720,6 +720,9 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             device_map = {"": "cuda:" + str(training_arguments.local_rank)}
         else:
             device_map = "auto"
+    model_load_kwargs = {}
+    if other_arguments.use_flash_attention:
+        model_load_kwargs["use_flash_attention_2"] = other_arguments.use_flash_attention
     if other_arguments.use_qlora:
         if training_arguments.deepspeed:
             raise ValueError(
@@ -739,7 +742,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             torch_dtype=get_torch_dtype(training_arguments),
             quantization_config=bnb_config,
             device_map=device_map,
-            use_flash_attention_2=other_arguments.use_flash_attention,
+            **model_load_kwargs,
         )
 
         model = prepare_model_for_kbit_training(
@@ -752,7 +755,7 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             use_cache=False if training_arguments.gradient_checkpointing else True,
             torch_dtype=get_torch_dtype(training_arguments),
             device_map=device_map,
-            use_flash_attention_2=other_arguments.use_flash_attention,
+            **model_load_kwargs,
         )
 
     if training_arguments.gradient_checkpointing:

@@ -1,12 +1,12 @@
 torch==2.0.1
 cloud-files==4.15.2
-mlfoundry==0.9.8
-transformers[accelerate,datasets,deepspeed,safetensors,sentencepiece,tokenizers]==4.33.2
+mlfoundry==0.10.0rc2
+transformers[accelerate,datasets,deepspeed,safetensors,sentencepiece,tokenizers]==4.34.0
 peft==0.5.0
-trl==0.5.0
+trl==0.7.2
 bitsandbytes==0.41.1
-xformers==0.0.20
-ninja==1.11.1
+xformers==0.0.22
+ninja==1.11.1.1
 packaging==23.1
 einops==0.7.0
 snowflake-connector-python[pandas]==3.3.1
