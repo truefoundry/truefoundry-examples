@@ -56,9 +56,10 @@ from transformers.utils import (
 from transformers.utils import logging as hf_logging_utils
 
 # TODO (chiragjn):
-#   - Add support to use Apex FusedAdam
 #   - Add support for use_flash_attention2 / Bettertransformers / torch sdpa dispatch with dataset packing
 #   - Find optimal combinations of batch_size, gradient accumulation, gradient checkpointing to get fastest training time in the given gpu budget
+#   - Add support for dataset streaming
+#   - Add support to use Apex FusedAdam
 #   - Test support for fp16 on older GPUs
 #   - Write a script to automatically capture gpu and memory metrics with different configurations
 #   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
@@ -71,7 +72,7 @@ TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 THIS_DIR = os.path.abspath(os.path.dirname(__name__))
 CACHE_DIR = os.path.join(THIS_DIR, ".cache")
 EXPORT_ZERO3_CHECKPOINT_TO_FP32 = False
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("finetune")
 
 IGNORE_INDEX = -100  # -100 is the default ignore index in CrossEntropyLoss
 DEFAULT_PAD_TOKEN = "[PAD]"
@@ -306,7 +307,7 @@ def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_argumen
         training_arguments.output_dir,
         low_cpu_mem_usage=True,
         torch_dtype=get_torch_dtype(training_arguments),
-        device_map="auto",
+        device_map="sequential",
     )
     # TODO (chiragjn): Add a assertion here to check device map does not have anything offloaded
     model = model.merge_and_unload()
@@ -585,6 +586,11 @@ def load_data(path, max_num_samples: Optional[int] = None):
                 artifact_version_fqn = path
             download_path = client.get_artifact_version_by_fqn(artifact_version_fqn).download(download_dir)
             lines = _read_lines_from_files(download_path)
+        elif path.startswith("snowflake://"):
+            from utils import get_data_from_snowflake_table
+
+            logger.info(f"Loading data from snowflake db ...")
+            lines = get_data_from_snowflake_table(uri=path, max_num_samples=max_num_samples)
         else:
             logger.info(f"Loading data from link: {path}")
             lines = _read_lines_from_cloudfile(path)

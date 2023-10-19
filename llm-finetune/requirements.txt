@@ -9,3 +9,4 @@ xformers==0.0.20
 ninja==1.11.1
 packaging==23.1
 einops==0.7.0
+snowflake-connector-python[pandas]==3.3.1
