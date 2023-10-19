@@ -87,8 +87,8 @@ COMPLETION_KEY = "completion"
 class HFTrainingArguments(TrainingArguments):
     def __post_init__(self):
         if not self.fp16:
-            self.bf16 = is_torch_bf16_gpu_available()
-            self.tf32 = is_torch_tf32_available()
+            self.bf16 = not self.no_cuda and torch.cuda.is_available() and is_torch_bf16_gpu_available()
+            self.tf32 = not self.no_cuda and torch.cuda.is_available() and is_torch_tf32_available()
         if self.save_strategy == IntervalStrategy.NO:
             self.load_best_model_at_end = False
         super().__post_init__()
@@ -979,8 +979,9 @@ def main():
     )
     training_arguments, other_arguments = parser.parse_args_into_dataclasses()
 
-    if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
-        raise ValueError("No GPUs detected. We need at least one gpu available to do efficient finetuning!")
+    if other_arguments.use_lora or other_arguments.use_qlora:
+        if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
+            raise RuntimeError("No GPUs detected. We need at least one gpu available for Lora/QLora finetuning!")
 
     other_arguments.checkpoint_artifact_name = resolve_checkpoint_artifact_name(
         other_arguments.checkpoint_artifact_name
