@@ -23,3 +23,5 @@
 --fp16 false
 --report_to none
 --save_safetensors true
+--ddp_find_unused_parameters false
+--ddp_backend nccl

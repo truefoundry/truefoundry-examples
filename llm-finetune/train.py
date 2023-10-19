@@ -5,9 +5,12 @@ import logging
 import math
 import os
 import re
+import shlex
 import shutil
+import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -18,6 +21,7 @@ import numpy as np
 import torch
 import torch.backends.cuda
 import torch.distributed
+from accelerate import infer_auto_device_map, init_empty_weights
 from cloudfiles import CloudFile
 from datasets import Dataset, DatasetDict
 from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
@@ -40,7 +44,6 @@ from transformers import (
     Trainer,
     TrainerCallback,
     TrainingArguments,
-    pipeline,
     set_seed,
 )
 from transformers.deepspeed import is_deepspeed_zero3_enabled
@@ -53,14 +56,15 @@ from transformers.utils import (
 from transformers.utils import logging as hf_logging_utils
 
 # TODO (chiragjn):
+#   - Add support to use Apex FusedAdam
+#   - Add support for use_flash_attention2 / Bettertransformers / torch sdpa dispatch with dataset packing
+#   - Find optimal combinations of batch_size, gradient accumulation, gradient checkpointing to get fastest training time in the given gpu budget
 #   - Test support for fp16 on older GPUs
 #   - Write a script to automatically capture gpu and memory metrics with different configurations
-#   - Test and fix Deepspeed weight gathering bugs during checkpointing if any
-#   - Test and fix code saving for models that have custom code
+#   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
 #   - Add support to push to HF Hub, as well as ability to read gated models
-#   - Add support for multi gpu Lora
 #   - Add support for text2text-generation
-#   - Add support to use  Apex FusedAdam
+
 
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
@@ -82,8 +86,8 @@ COMPLETION_KEY = "completion"
 class HFTrainingArguments(TrainingArguments):
     def __post_init__(self):
         if not self.fp16:
-            self.bf16 = not self.no_cuda and torch.cuda.is_available() and is_torch_bf16_gpu_available()
-            self.tf32 = not self.no_cuda and torch.cuda.is_available() and is_torch_tf32_available()
+            self.bf16 = is_torch_bf16_gpu_available()
+            self.tf32 = is_torch_tf32_available()
         if self.save_strategy == IntervalStrategy.NO:
             self.load_best_model_at_end = False
         super().__post_init__()
@@ -103,6 +107,18 @@ class OtherArguments:
         default="NA",
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
+    train_on_prompt: bool = field(
+        default=False,
+        metadata={"help": "If to train on prompt and include it in the loss"},
+    )
+    use_flash_attention: bool = field(
+        default=False,
+        metadata={"help": "If to use flash attention to speed up training - only supported on some architectures!"},
+    )
+    use_ddp: bool = field(
+        default=False,
+        metadata={"help": "If to use DDP - only applicable when multiple gpus are available"},
+    )
     report_to_mlfoundry: bool = field(
         default=True,
         metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
@@ -111,7 +127,6 @@ class OtherArguments:
         default=True,
         metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
     )
-    # TODO (chiragjn): Add option to control max shard size
     checkpoint_artifact_name: Optional[str] = field(
         default=None,
         metadata={
@@ -119,9 +134,32 @@ class OtherArguments:
             "The artifact will be created if it does not exist under the give ML Repo"
         },
     )
+    # TODO (chiragjn): Add option to control max shard size
     use_lora: bool = field(
         default=False,
         metadata={"help": "If to train the model with LoRa"},
+    )
+    lora_r: int = field(
+        default=8,
+        metadata={"help": "r value for lora config"},
+    )
+    lora_alpha: int = field(
+        default=32,
+        metadata={"help": "value of alpha for lora config"},
+    )
+    lora_target_modules: str = field(
+        default="auto",
+        metadata={"help": "The names of the modules to apply Lora to"},
+    )
+    lora_dropout: float = field(
+        default=0.05,
+        metadata={"help": "The dropout probability for Lora layers."},
+    )
+    lora_bias: str = field(
+        default="none",
+        metadata={
+            "help": "Bias type for Lora. Can be 'none', 'all' or 'lora_only'. If 'all' or 'lora_only', the corresponding biases will be updated during training."
+        },
     )
     use_qlora: bool = field(
         default=False,
@@ -156,28 +194,6 @@ class OtherArguments:
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
     )
-    lora_r: int = field(
-        default=8,
-        metadata={"help": "r value for lora config"},
-    )
-    lora_alpha: int = field(
-        default=32,
-        metadata={"help": "value of alpha for lora config"},
-    )
-    lora_target_modules: str = field(
-        default="auto",
-        metadata={"help": "The names of the modules to apply Lora to"},
-    )
-    lora_dropout: float = field(
-        default=0.05,
-        metadata={"help": "The dropout probability for Lora layers."},
-    )
-    lora_bias: str = field(
-        default="none",
-        metadata={
-            "help": "Bias type for Lora. Can be 'none', 'all' or 'lora_only'. If 'all' or 'lora_only', the corresponding biases will be updated during training."
-        },
-    )
 
 
 class DataValidationException(Exception):
@@ -194,22 +210,6 @@ def get_torch_dtype(training_arguments: HFTrainingArguments):
 
 
 # --- Model checkpointing and logging utils ---
-
-
-def find_all_linear_names(model):
-    lora_module_names = set()
-    for name, module in model.named_modules():
-        if isinstance(module, bnb.nn.Linear4bit):
-            names = name.split(".")
-            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
-
-    if "lm_head" in lora_module_names:  # needed for 16-bit
-        lora_module_names.remove("lm_head")
-    if len(list(lora_module_names)) == 0:
-        raise ValueError(
-            "Cannot automatically find target modules for LoRa please provide --lora_target_modules explicitly"
-        )
-    return list(lora_module_names)
 
 
 def resolve_checkpoint_artifact_name(
@@ -292,12 +292,34 @@ def cleanup_checkpoints(
             shutil.rmtree(f_path)
 
 
-def log_model_as_pipeline(
+def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
+    # TODO (chiragjn): We do not want to offload to cpu or disk here!
+    # This is a known issue. We need to very careful to make sure eveyrthing fits within GPU memory
+    for _ in range(5):  # Yes, this is stupid but necessary
+        gc.collect()
+        time.sleep(5)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+    logger.info("Merging lora adapter into main model")
+    model = AutoPeftModelForCausalLM.from_pretrained(
+        training_arguments.output_dir,
+        low_cpu_mem_usage=True,
+        torch_dtype=get_torch_dtype(training_arguments),
+        device_map="auto",
+    )
+    # TODO (chiragjn): Add a assertion here to check device map does not have anything offloaded
+    model = model.merge_and_unload()
+    model.save_pretrained(training_arguments.output_dir, safe_serialization=True)
+    for filename in ["adapter_config.json", "adapter_model.safetensors", "adapter_model.bin"]:
+        file_to_delete = os.path.join(training_arguments.output_dir, filename)
+        if os.path.exists(file_to_delete):
+            os.remove(file_to_delete)
+
+
+def log_model_to_mlfoundry(
     run: mlfoundry.MlFoundryRun, training_arguments: HFTrainingArguments, model_name: str, hf_hub_model_id: str
 ):
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
     logger.info("Saving Model...")
     cleanup_checkpoints(training_arguments=training_arguments)
 
@@ -311,7 +333,6 @@ def log_model_as_pipeline(
                         files_to_save.append(file.file_path)
                 break
 
-    additional_files = []
     # copy the files to output_dir of pipeline
     for file_path in files_to_save:
         match = re.match(r".*snapshots\/[^\/]+\/(.*)", str(file_path))
@@ -320,61 +341,53 @@ def log_model_as_pipeline(
             destination_path = os.path.join(training_arguments.output_dir, relative_path)
             os.makedirs(os.path.dirname(destination_path), exist_ok=True)
             shutil.copy(str(file_path), destination_path)
-            additional_files.append((destination_path, os.path.join("model", "pipeline", relative_path)))
         else:
             logger.warning("Python file in hf model cache in unknown path:", file_path)
 
-    p = pipeline(
-        "text-generation",
-        model=training_arguments.output_dir,
-        tokenizer=training_arguments.output_dir,
-        trust_remote_code=True,
-        torch_dtype=get_torch_dtype(training_arguments=training_arguments),
-        device_map="auto",  # We load on GPUs if available because we can be low on regular memory
-    )
     metadata = training_arguments.to_sanitized_dict()
     metadata.update({"huggingface_model_url": f"https://huggingface.co/{hf_hub_model_id}"})
 
     run.log_model(
         name=model_name,
-        model=p,
+        model_file_or_folder=training_arguments.output_dir,
         framework="transformers",
         metadata=metadata,
-        additional_files=additional_files,
     )
 
 
-def filter_trainer_args_for_logging(trainer_args: TrainingArguments, other_args: OtherArguments) -> Dict[str, Any]:
+def filter_trainer_args_for_logging(
+    training_arguments: TrainingArguments, other_arguments: OtherArguments
+) -> Dict[str, Any]:
     # TODO (chiragjn): Update this list
     arguments = {
-        "num_train_epochs": trainer_args.num_train_epochs,
-        "per_device_train_batch_size": trainer_args.per_device_train_batch_size,
-        "learning_rate": trainer_args.learning_rate,
-        "lr_scheduler_type": trainer_args.lr_scheduler_type,
-        "weight_decay": trainer_args.weight_decay,
-        "max_grad_norm": trainer_args.max_grad_norm,
-        "gradient_accumulation_steps": trainer_args.gradient_accumulation_steps,
-        "warmup_ratio": trainer_args.warmup_ratio,
+        "num_train_epochs": training_arguments.num_train_epochs,
+        "per_device_train_batch_size": training_arguments.per_device_train_batch_size,
+        "learning_rate": training_arguments.learning_rate,
+        "lr_scheduler_type": training_arguments.lr_scheduler_type,
+        "weight_decay": training_arguments.weight_decay,
+        "max_grad_norm": training_arguments.max_grad_norm,
+        "gradient_accumulation_steps": training_arguments.gradient_accumulation_steps,
+        "warmup_ratio": training_arguments.warmup_ratio,
+        "use_lora": other_arguments.use_lora,
+        "use_qlora": other_arguments.use_qlora,
     }
-    if other_args.use_lora:
-        if other_args.use_qlora:
-            qlora_args = {
-                "use_qlora": other_args.use_qlora,
-                "bnb_4bit_quant_type": other_args.bnb_4bit_quant_type,
-                "use_double_quant": other_args.use_double_quant,
-                "qlora_bit_length": other_args.qlora_bit_length,
-            }
-            arguments.update(qlora_args)
-
+    if other_arguments.use_lora:
         lora_args = {
-            "use_lora": other_args.use_lora,
-            "lora_r": other_args.lora_r,
-            "lora_alpha": other_args.lora_alpha,
-            "lora_target_modules": other_args.lora_target_modules,
-            "lora_dropout": other_args.lora_dropout,
-            "lora_bias": other_args.lora_bias,
+            "lora_r": other_arguments.lora_r,
+            "lora_alpha": other_arguments.lora_alpha,
+            "lora_target_modules": other_arguments.lora_target_modules,
+            "lora_dropout": other_arguments.lora_dropout,
+            "lora_bias": other_arguments.lora_bias,
         }
         arguments.update(lora_args)
+
+    if other_arguments.use_qlora:
+        qlora_args = {
+            "bnb_4bit_quant_type": other_arguments.bnb_4bit_quant_type,
+            "use_double_quant": other_arguments.use_double_quant,
+            "qlora_bit_length": other_arguments.qlora_bit_length,
+        }
+        arguments.update(qlora_args)
 
     return arguments
 
@@ -570,7 +583,7 @@ def load_data(path, max_num_samples: Optional[int] = None):
                 _, artifact_version_fqn = path.split("mlfoundry://", 1)
             else:
                 artifact_version_fqn = path
-            download_path = client.get_artifact(artifact_version_fqn).download(download_dir)
+            download_path = client.get_artifact_version_by_fqn(artifact_version_fqn).download(download_dir)
             lines = _read_lines_from_files(download_path)
         else:
             logger.info(f"Loading data from link: {path}")
@@ -592,9 +605,9 @@ def load_data(path, max_num_samples: Optional[int] = None):
                         raise DataValidationException(
                             f"Required key `{key}` is missing from json line on line number {line_no}. Line: {line[:150]}..."
                         )
-                    if not isinstance(datapoint_dict[key], str) or not datapoint_dict[key]:
+                    if not isinstance(datapoint_dict[key], str):
                         raise DataValidationException(
-                            f"Value for `{key}` is not a non-empty string on line on line number {line_no}. Line: {line[:150]}..."
+                            f"Value for `{key}` is not string on line number {line_no}. Line: {line[:150]}..."
                         )
 
                 datapoint_dict = {
@@ -625,7 +638,7 @@ def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArgu
     return train_data, eval_data
 
 
-def build_dataset(train_data, eval_data, tokenizer, max_length, training_arguments):
+def build_dataset(train_data, eval_data, tokenizer, max_length: int, training_arguments: TrainingArguments):
     logger.info("Building dataset...")
     dataset_cache_path = os.path.join(CACHE_DIR, "dataset")
     if training_arguments.local_rank <= 0:
@@ -657,7 +670,9 @@ def setup(training_arguments: HFTrainingArguments):
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(fmt=f"%(asctime)s [Rank-{training_arguments.local_rank}] %(levelname)s %(message)s")
+    formatter = logging.Formatter(
+        fmt=f"%(asctime)s [Rank-{training_arguments.local_rank}] %(levelname)s - %(module)s:%(funcName)s:%(lineno)d - %(message)s"
+    )
     handler.setFormatter(formatter)
 
     logger.setLevel(logging.DEBUG)
@@ -667,10 +682,31 @@ def setup(training_arguments: HFTrainingArguments):
     hf_logging_utils.add_handler(handler)
 
 
+def find_all_linear_names(model):
+    lora_module_names = set()
+    for name, module in model.named_modules():
+        if isinstance(module, bnb.nn.Linear4bit):
+            names = name.split(".")
+            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+
+    if "lm_head" in lora_module_names:  # needed for 16-bit
+        lora_module_names.remove("lm_head")
+    if len(list(lora_module_names)) == 0:
+        raise ValueError(
+            "Cannot automatically find target modules for LoRa please provide --lora_target_modules explicitly"
+        )
+    return list(lora_module_names)
+
+
 def get_model(model_source: str, training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    # TODO (chiragjn): Should we pass a torch_dtype here?
     logger.info("Loading model...")
-    no_of_gpus = torch.cuda.device_count()
+    no_of_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    device_map = None
+    if not training_arguments.deepspeed:
+        if other_arguments.use_ddp and no_of_gpus > 1:
+            device_map = {"": "cuda:" + str(training_arguments.local_rank)}
+        else:
+            device_map = "auto"
     if other_arguments.use_qlora:
         if training_arguments.deepspeed:
             raise ValueError(
@@ -689,7 +725,8 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             use_cache=False if training_arguments.gradient_checkpointing else True,
             torch_dtype=get_torch_dtype(training_arguments),
             quantization_config=bnb_config,
-            device_map="auto" if no_of_gpus > 1 else None,
+            device_map=device_map,
+            use_flash_attention_2=other_arguments.use_flash_attention,
         )
 
         model = prepare_model_for_kbit_training(
@@ -701,7 +738,8 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             trust_remote_code=True,
             use_cache=False if training_arguments.gradient_checkpointing else True,
             torch_dtype=get_torch_dtype(training_arguments),
-            device_map="auto" if no_of_gpus > 1 else None,
+            device_map=device_map,
+            use_flash_attention_2=other_arguments.use_flash_attention,
         )
 
     if training_arguments.gradient_checkpointing:
@@ -758,6 +796,22 @@ def get_max_length(max_length, tokenizer, model_config):
             max_length = tokenizer.model_max_length
     logger.info(f"Finally using max_length: {max_length}")
     return max_length
+
+
+def check_if_model_will_fit_only_with_gpus(
+    training_arguments: HFTrainingArguments,
+    other_arguments: OtherArguments,
+):
+    config = AutoConfig.from_pretrained(other_arguments.model_id)
+    with init_empty_weights():
+        model = AutoModelForCausalLM.from_config(config)
+    device_map = infer_auto_device_map(model, dtype=get_torch_dtype(training_arguments))
+    logger.info(f"Inferred device_map for auto settings: {device_map}")
+    if any(not isinstance(v, int) for v in device_map.values()):
+        raise ValueError(
+            "For lora/qlora the model must entirely fit on gpus without any kind of offloading to prevent bugs with saving checkpoint! "
+            "With the current configuration model is being offloaded to cpu/disk."
+        )
 
 
 def train(
@@ -834,16 +888,21 @@ def train(
         other_arguments.lora_config.inference_mode = False
         model = get_peft_model(model, other_arguments.lora_config)
 
+        # TODO: prepare for kbit training casts the base model to fp32 for stability reasons
         for name, module in model.named_modules():
             if isinstance(module, LoraLayer):
                 if training_arguments.bf16:
                     module = module.to(torch.bfloat16)
+                elif training_arguments.fp16:
+                    module = module.to(torch.float16)
             if "norm" in name:
                 module = module.to(torch.float32)
-            if "lm_head" in name or "embed_tokens" in name:
+            if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
                 if hasattr(module, "weight"):
                     if training_arguments.bf16 and module.weight.dtype == torch.float32:
                         module = module.to(torch.bfloat16)
+                    elif training_arguments.fp16:
+                        module = module.to(torch.float16)
         if training_arguments.gradient_checkpointing:
             model.enable_input_require_grads()
 
@@ -899,21 +958,6 @@ def train(
         logger.info("Syncing all processes")
         torch.distributed.barrier()
 
-    if other_arguments.use_lora or other_arguments.use_qlora:
-        if training_arguments.local_rank <= 0:
-            logger.info("Merging lora adapter into main model")
-            model = AutoPeftModelForCausalLM.from_pretrained(
-                training_arguments.output_dir,
-                low_cpu_mem_usage=True,
-                torch_dtype=get_torch_dtype(training_arguments),
-            )
-            model = model.merge_and_unload()
-            model.save_pretrained(training_arguments.output_dir, safe_serialization=True)
-            for filename in ["adapter_config.json", "adapter_model.safetensors", "adapter_model.bin"]:
-                file_to_delete = os.path.join(training_arguments.output_dir, filename)
-                if os.path.exists(file_to_delete):
-                    os.remove(file_to_delete)
-
 
 def main():
     parser = HfArgumentParser(
@@ -921,6 +965,10 @@ def main():
         description="Fine-tune a language model on a text dataset",
     )
     training_arguments, other_arguments = parser.parse_args_into_dataclasses()
+
+    if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
+        raise ValueError("No GPUs detected. We need at least one gpu available to do efficient finetuning!")
+
     other_arguments.checkpoint_artifact_name = resolve_checkpoint_artifact_name(
         other_arguments.checkpoint_artifact_name
     )
@@ -932,6 +980,44 @@ def main():
     setup(training_arguments=training_arguments)
     logger.info(f"Training Arguments: {training_arguments}")
     logger.info(f"Arguments: {other_arguments}")
+
+    # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
+    _tempdir = os.getenv("TMPDIR")
+    if _tempdir:
+        if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
+            raise ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
+        else:
+            os.makedirs(_tempdir, exist_ok=True)
+
+    # Install flash-attn package - needs to be compiled during runtime to avoid linking errors
+    if other_arguments.use_flash_attention:
+        if not (training_arguments.bf16 or training_arguments.fp16):
+            raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
+        logger.info("Installing flash-attn ...")
+        try:
+            _env = os.environ.copy()
+            _env["MAX_JOBS"] = "4"
+            with subprocess.Popen(
+                [
+                    "python",
+                    "-m",
+                    "pip",
+                    "install",
+                    "-q",
+                    "--no-build-isolation",
+                    "--no-cache-dir",
+                    "-U",
+                    "flash-attn==2.3.2",
+                ],
+                env=_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            ) as process:
+                for line in process.stdout:
+                    print(line.decode("utf8"))
+        except Exception:
+            logger.warning("flash-attn failed to install!")
+        import flash_attn as _
 
     run = None
     if training_arguments.local_rank <= 0 and other_arguments.report_to_mlfoundry:
@@ -950,20 +1036,23 @@ def main():
             logger.warning(f"--cleanup_output_dir_on_start was to set to True, wiping {training_arguments.output_dir}")
             shutil.rmtree(training_arguments.output_dir)
 
-    # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
-    _tempdir = os.getenv("TMPDIR")
-    if _tempdir:
-        if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
-            raise ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
-        else:
-            os.makedirs(_tempdir, exist_ok=True)
+    if training_arguments.local_rank <= 0:
+        if other_arguments.use_lora or other_arguments.use_qlora:
+            check_if_model_will_fit_only_with_gpus(
+                training_arguments=training_arguments, other_arguments=other_arguments
+            )
 
-    # TODO (chiragjn): Enabled faster kernels for scaled dot product
-    # with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=True, enable_mem_efficient=True):
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
 
+    if training_arguments.local_rank <= 0:
+        if other_arguments.use_lora or other_arguments.use_qlora:
+            check_if_model_will_fit_only_with_gpus(
+                training_arguments=training_arguments, other_arguments=other_arguments
+            )
+            merge_adapters_if_any(training_arguments=training_arguments, other_arguments=other_arguments)
+
     if training_arguments.local_rank <= 0 and run:
-        log_model_as_pipeline(
+        log_model_to_mlfoundry(
             run=run,
             training_arguments=training_arguments,
             model_name=model_name,
