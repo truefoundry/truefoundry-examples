@@ -904,13 +904,13 @@ def train(
         other_arguments.lora_config.inference_mode = False
         model = get_peft_model(model, other_arguments.lora_config)
 
-        # TODO: prepare for kbit training casts the base model to fp32 for stability reasons
+        # TODO: Check if training in bfloat16 is stable enough
         for name, module in model.named_modules():
             if isinstance(module, LoraLayer):
                 if training_arguments.bf16:
                     module = module.to(torch.bfloat16)
                 elif training_arguments.fp16:
-                    module = module.to(torch.float16)
+                    module = module.to(torch.float32)
             if "norm" in name:
                 module = module.to(torch.float32)
             if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
@@ -918,7 +918,7 @@ def train(
                     if training_arguments.bf16 and module.weight.dtype == torch.float32:
                         module = module.to(torch.bfloat16)
                     elif training_arguments.fp16:
-                        module = module.to(torch.float16)
+                        module = module.to(torch.float32)
         if training_arguments.gradient_checkpointing:
             model.enable_input_require_grads()
 
