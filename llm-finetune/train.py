@@ -304,6 +304,7 @@ def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_argumen
     logger.info("Loading model and lora layers for merging ...")
     model = AutoPeftModelForCausalLM.from_pretrained(
         training_arguments.output_dir,
+        trust_remote_code=True,
         low_cpu_mem_usage=True,
         torch_dtype=get_torch_dtype(training_arguments),
         device_map="sequential",
@@ -777,18 +778,27 @@ def find_all_linear_names(model, other_arguments: OtherArguments):
     return list(lora_module_names)
 
 
-def get_model(model_source: str, training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
+def get_model(
+    model_source: str, model_config, training_arguments: HFTrainingArguments, other_arguments: OtherArguments
+):
     logger.info("Loading model...")
     no_of_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+
     device_map = None
     if not training_arguments.deepspeed:
         if other_arguments.use_ddp and no_of_gpus > 1:
             device_map = {"": "cuda:" + str(training_arguments.local_rank)}
         else:
             device_map = "auto"
+
     model_load_kwargs = {}
+    model_load_kwargs["use_cache"] = False if training_arguments.gradient_checkpointing else True
+    if model_config.architectures and model_config.architectures[0] == "PhiForCausalLM":
+        model_load_kwargs.pop("use_cache", None)
+
     if other_arguments.use_flash_attention:
         model_load_kwargs["use_flash_attention_2"] = other_arguments.use_flash_attention
+
     if other_arguments.use_qlora:
         if training_arguments.deepspeed:
             raise ValueError(
@@ -807,7 +817,6 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
             trust_remote_code=True,
-            use_cache=False if training_arguments.gradient_checkpointing else True,
             torch_dtype=compute_dtype,
             quantization_config=bnb_config,
             device_map=device_map,
@@ -821,7 +830,6 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
             trust_remote_code=True,
-            use_cache=False if training_arguments.gradient_checkpointing else True,
             torch_dtype=get_torch_dtype(training_arguments),
             device_map=device_map,
             **model_load_kwargs,
@@ -943,7 +951,12 @@ def train(
         logger.info("Getting other ranks in sync with main process")
         torch.distributed.barrier()
 
-    model = get_model(model_source, training_arguments=training_arguments, other_arguments=other_arguments)
+    model = get_model(
+        model_source=model_source,
+        model_config=model_config,
+        training_arguments=training_arguments,
+        other_arguments=other_arguments,
+    )
     if other_arguments.use_lora or other_arguments.use_qlora:
         if other_arguments.lora_target_modules == "auto":
             modules = find_all_linear_names(model, other_arguments=other_arguments)
