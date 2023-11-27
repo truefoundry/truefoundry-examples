@@ -5,7 +5,6 @@ import logging
 import math
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -56,15 +55,14 @@ from transformers.utils import (
 from transformers.utils import logging as hf_logging_utils
 
 # TODO (chiragjn):
-#   - Add support for use_flash_attention2 / Bettertransformers / torch sdpa dispatch with dataset packing
+#   - Refactor and split code into sub modules. Make torch.distributed calls more intuitive  with accelerate and decorators
+#   - Add support for Bettertransformers / torch sdpa dispatch with dataset packing
 #   - Find optimal combinations of batch_size, gradient accumulation, gradient checkpointing to get fastest training time in the given gpu budget
 #   - Add support for dataset streaming
 #   - Add support to use Apex FusedAdam
-#   - Test support for fp16 on older GPUs
 #   - Write a script to automatically capture gpu and memory metrics with different configurations
 #   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
-#   - Add support to push to HF Hub, as well as ability to read gated models
-#   - Add support for text2text-generation
+#   - Add support to push to HF Hub
 
 
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
@@ -141,11 +139,11 @@ class OtherArguments:
         metadata={"help": "If to train the model with LoRa"},
     )
     lora_r: int = field(
-        default=8,
+        default=32,
         metadata={"help": "r value for lora config"},
     )
     lora_alpha: int = field(
-        default=32,
+        default=64,
         metadata={"help": "value of alpha for lora config"},
     )
     lora_target_modules: str = field(
@@ -670,27 +668,95 @@ def build_dataset(train_data, eval_data, tokenizer, max_length: int, training_ar
 
 
 # --- Core Training Code ---
+def _maybe_set_custom_tempdir():
+    # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
+    _tempdir = os.getenv("TMPDIR")
+    if _tempdir:
+        if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
+            raise ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
+        else:
+            os.makedirs(_tempdir, exist_ok=True)
 
 
-def setup(training_arguments: HFTrainingArguments):
+def _maybe_set_torch_max_memory(device: int):
+    torch_per_process_memory_limit = os.getenv("TORCH_PER_PROCESS_MEMORY_LIMIT_MIB")
+    if torch_per_process_memory_limit:
+        if torch.cuda.is_available() and device >= 0:
+            torch_per_process_memory_limit = int(torch_per_process_memory_limit)
+            _, total = torch.cuda.mem_get_info()
+            frac = (torch_per_process_memory_limit * 1024 * 1024) / total
+            logger.info(f"Setting max memory limit on device {device} to {frac} ({torch_per_process_memory_limit} MiB)")
+            torch.cuda.set_per_process_memory_fraction(frac, device=device)
+
+
+def _install_flash_attention():
+    # Install flash-attn package - needs to be compiled during runtime to avoid linking errors
+    logger.info("Installing flash-attn ...")
+    _env = os.environ.copy()
+    _env["MAX_JOBS"] = "4"
+    with subprocess.Popen(
+        [
+            "python",
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "--no-build-isolation",
+            "--no-cache-dir",
+            "-U",
+            "flash-attn==2.3.4",
+        ],
+        env=_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    ) as process:
+        for line in process.stdout:
+            print(line.decode("utf8"))
+
+
+def _setup_logging(training_arguments: HFTrainingArguments):
     global logger
-    os.makedirs(CACHE_DIR, exist_ok=True)
-
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter(
         fmt=f"%(asctime)s [Rank-{training_arguments.local_rank}] %(levelname)s - %(module)s:%(funcName)s:%(lineno)d - %(message)s"
     )
     handler.setFormatter(formatter)
-
     logger.setLevel(logging.DEBUG)
     logger.addHandler(handler)
-
     hf_logging_utils.disable_default_handler()
     hf_logging_utils.add_handler(handler)
 
 
+def setup(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    _setup_logging(training_arguments=training_arguments)
+    _maybe_set_custom_tempdir()
+    _maybe_set_torch_max_memory(device=training_arguments.local_rank)
+
+    if other_arguments.use_flash_attention:
+        if not (training_arguments.bf16 or training_arguments.fp16):
+            raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
+
+        if training_arguments.world_size > 1 and training_arguments.local_rank > 0:
+            logger.info("Waiting for main process to install flash attention ...")
+            torch.distributed.barrier()
+
+        if training_arguments.local_rank <= 0:
+            try:
+                _install_flash_attention()
+            except Exception:
+                logger.warning("flash-attn failed to install!")
+
+        if training_arguments.world_size > 1 and training_arguments.local_rank <= 0:
+            logger.info("Getting other ranks in sync with main process")
+            torch.distributed.barrier()
+
+        import flash_attn as _
+
+
 def find_all_linear_names(model, other_arguments: OtherArguments):
+    # TODO: Add targeting lm_head
     lora_module_names = set()
     target_cls_type = torch.nn.Linear
     if other_arguments.use_qlora and other_arguments.qlora_bit_length == 8:
@@ -728,10 +794,13 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             raise ValueError(
                 "deepspeed is incompatible with qlora fine-tuning please try fine-tuning without deepspeed"
             )
+        compute_dtype = torch.float32
+        if training_arguments.bf16:
+            compute_dtype = torch.bfloat16
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=other_arguments.qlora_bit_length == 4,
             load_in_8bit=other_arguments.qlora_bit_length == 8,
-            bnb_4bit_compute_dtype=get_torch_dtype(training_arguments=training_arguments),
+            bnb_4bit_compute_dtype=compute_dtype,
             bnb_4bit_use_double_quant=other_arguments.use_double_quant,
             bnb_4bit_quant_type=other_arguments.bnb_4bit_quant_type,
         )
@@ -739,15 +808,15 @@ def get_model(model_source: str, training_arguments: HFTrainingArguments, other_
             model_source,
             trust_remote_code=True,
             use_cache=False if training_arguments.gradient_checkpointing else True,
-            torch_dtype=get_torch_dtype(training_arguments),
+            torch_dtype=compute_dtype,
             quantization_config=bnb_config,
             device_map=device_map,
             **model_load_kwargs,
         )
-
         model = prepare_model_for_kbit_training(
             model, use_gradient_checkpointing=training_arguments.gradient_checkpointing
         )
+        training_arguments.optim = "paged_adamw_32bit"
     else:
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
@@ -818,9 +887,9 @@ def check_if_model_will_fit_only_with_gpus(
     training_arguments: HFTrainingArguments,
     other_arguments: OtherArguments,
 ):
-    config = AutoConfig.from_pretrained(other_arguments.model_id)
+    config = AutoConfig.from_pretrained(other_arguments.model_id, trust_remote_code=True)
     with init_empty_weights():
-        model = AutoModelForCausalLM.from_config(config)
+        model = AutoModelForCausalLM.from_config(config, trust_remote_code=True)
     device_map = infer_auto_device_map(model, dtype=get_torch_dtype(training_arguments))
     logger.info(f"Inferred device_map for auto settings: {device_map}")
     if any(not isinstance(v, int) for v in device_map.values()):
@@ -851,7 +920,7 @@ def train(
     )
 
     logger.info("Loading config ...")
-    model_config = AutoConfig.from_pretrained(other_arguments.model_id)
+    model_config = AutoConfig.from_pretrained(other_arguments.model_id, trust_remote_code=True)
 
     if last_checkpoint_dir:
         model_source = last_checkpoint_dir
@@ -909,16 +978,10 @@ def train(
             if isinstance(module, LoraLayer):
                 if training_arguments.bf16:
                     module = module.to(torch.bfloat16)
-                elif training_arguments.fp16:
-                    module = module.to(torch.float32)
-            if "norm" in name:
-                module = module.to(torch.float32)
             if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
                 if hasattr(module, "weight"):
                     if training_arguments.bf16 and module.weight.dtype == torch.float32:
                         module = module.to(torch.bfloat16)
-                    elif training_arguments.fp16:
-                        module = module.to(torch.float32)
         if training_arguments.gradient_checkpointing:
             model.enable_input_require_grads()
 
@@ -959,7 +1022,7 @@ def train(
         #  Under ZeRO 3, when checkpointing, each rank saves their own part, in zero format
         #  if "stage3_gather_16bit_weights_on_model_save": true,
         #  then an additional pytorch_model.bin is saved as a 16-bit checkpoint
-        #  if we want fp32 pytorch_model.bin then we would have to export separately from the checkpoint in zero forma
+        #  if we want fp32 pytorch_model.bin then we would have to export separately from the checkpoint in zero format
         trainer.save_model(output_dir=training_arguments.output_dir)
         if training_arguments.local_rank <= 0:
             fp32_weights_path = os.path.join(training_arguments.output_dir, WEIGHTS_NAME)
@@ -994,47 +1057,9 @@ def main():
     model_name = "-".join(["finetuned", model_name, timestamp])
     model_name = model_name.replace(".", "-")
 
-    setup(training_arguments=training_arguments)
     logger.info(f"Training Arguments: {training_arguments}")
     logger.info(f"Arguments: {other_arguments}")
-
-    # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
-    _tempdir = os.getenv("TMPDIR")
-    if _tempdir:
-        if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
-            raise ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
-        else:
-            os.makedirs(_tempdir, exist_ok=True)
-
-    # Install flash-attn package - needs to be compiled during runtime to avoid linking errors
-    if other_arguments.use_flash_attention:
-        if not (training_arguments.bf16 or training_arguments.fp16):
-            raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
-        logger.info("Installing flash-attn ...")
-        try:
-            _env = os.environ.copy()
-            _env["MAX_JOBS"] = "4"
-            with subprocess.Popen(
-                [
-                    "python",
-                    "-m",
-                    "pip",
-                    "install",
-                    "-q",
-                    "--no-build-isolation",
-                    "--no-cache-dir",
-                    "-U",
-                    "flash-attn==2.3.2",
-                ],
-                env=_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            ) as process:
-                for line in process.stdout:
-                    print(line.decode("utf8"))
-        except Exception:
-            logger.warning("flash-attn failed to install!")
-        import flash_attn as _
+    setup(training_arguments=training_arguments, other_arguments=other_arguments)
 
     run = None
     if training_arguments.local_rank <= 0 and other_arguments.report_to_mlfoundry:
