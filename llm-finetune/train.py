@@ -84,9 +84,7 @@ COMPLETION_KEY = "completion"
 @dataclass
 class HFTrainingArguments(TrainingArguments):
     def __post_init__(self):
-        if not self.fp16:
-            self.bf16 = not self.no_cuda and torch.cuda.is_available() and is_torch_bf16_gpu_available()
-            self.tf32 = not self.no_cuda and torch.cuda.is_available() and is_torch_tf32_available()
+        self.tf32 = not self.use_cpu and torch.cuda.is_available() and is_torch_tf32_available()
         if self.save_strategy == IntervalStrategy.NO:
             self.load_best_model_at_end = False
         super().__post_init__()
@@ -95,8 +93,7 @@ class HFTrainingArguments(TrainingArguments):
 @dataclass
 class OtherArguments:
     model_id: str = field(metadata={"help": "Huggingface hub model ID"})
-    # TODO (chiragjn): Make this optional, because now we have --report_to_mlfoundry
-    ml_repo: str = field(metadata={"help": "ML Repo to put the model to"})
+    mlfoundry_ml_repo: str = field(metadata={"help": "ML Repo to put the model to"})
     train_data: str = field(metadata={"help": "URL to the jsonl training dataset"})
     eval_size: Optional[float] = field(
         default=0.1,
@@ -107,7 +104,7 @@ class OtherArguments:
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
     train_on_prompt: bool = field(
-        default=False,
+        default=True,
         metadata={"help": "If to train on prompt and include it in the loss"},
     )
     use_flash_attention: bool = field(
@@ -118,22 +115,6 @@ class OtherArguments:
         default=False,
         metadata={"help": "If to use DDP - only applicable when multiple gpus are available"},
     )
-    report_to_mlfoundry: bool = field(
-        default=True,
-        metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
-    )
-    log_checkpoints_to_mlfoundry: bool = field(
-        default=True,
-        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
-    )
-    checkpoint_artifact_name: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "ML Repo artifact name to save checkpoints. \n"
-            "The artifact will be created if it does not exist under the give ML Repo"
-        },
-    )
-    # TODO (chiragjn): Add option to control max shard size
     use_lora: bool = field(
         default=False,
         metadata={"help": "If to train the model with LoRa"},
@@ -189,6 +170,26 @@ class OtherArguments:
         default=None,
         metadata={"help": "For quick debugging purposes, how many samples to use (default: all)"},
     )
+    mlfoundry_enable_reporting: bool = field(
+        default=True,
+        metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
+    )
+    mlfoundry_run_name: Optional[str] = field(
+        default=None,
+        metadata={"help": "Run name for mlfoundry run"},
+    )
+    mlfoundry_log_checkpoints: bool = field(
+        default=True,
+        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
+    )
+    mlfoundry_checkpoint_artifact_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "ML Repo artifact name to save checkpoints. \n"
+            "The artifact will be created if it does not exist under the give ML Repo"
+        },
+    )
+    # TODO (chiragjn): Add option to control max shard size
     cleanup_output_dir_on_start: bool = field(
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
@@ -293,10 +294,14 @@ def cleanup_checkpoints(
 
 def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     # TODO (chiragjn): We do not want anything to be offloaded to cpu or disk here!
-    # This is a known issue - https://github.com/huggingface/peft/issues/868
-    for _ in range(3):  # Yes, this is stupid but necessary
+    # This is a known issue with fix in progress
+    #   - https://github.com/huggingface/peft/pull/1063
+    #   - https://github.com/huggingface/transformers/pull/27412
+    for _ in range(
+        3
+    ):  # Yes, this is stupid but necessary till the above PRs are merged and made available in a new version
         gc.collect()
-        time.sleep(5)
+        time.sleep(3)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
@@ -393,16 +398,16 @@ def filter_trainer_args_for_logging(
     return arguments
 
 
-class Callback(TrainerCallback):
+class MLFoundryCallback(TrainerCallback):
     def __init__(
         self,
         run: Optional[mlfoundry.MlFoundryRun] = None,
         checkpoint_artifact_name: Optional[str] = None,
-        log_checkpoints_to_mlfoundry: bool = True,
+        log_checkpoints: bool = True,
     ):
         self._run = run
         self._checkpoint_artifact_name = checkpoint_artifact_name
-        self._log_checkpoints_to_mlfoundry = log_checkpoints_to_mlfoundry
+        self._log_checkpoints = log_checkpoints
 
         if not self._checkpoint_artifact_name:
             logger.warning("checkpoint_artifact_name not passed. Checkpoints will not be logged to MLFoundry")
@@ -448,7 +453,7 @@ class Callback(TrainerCallback):
         if not self._run or not self._checkpoint_artifact_name:
             return
 
-        if not self._log_checkpoints_to_mlfoundry:
+        if not self._log_checkpoints:
             return
 
         ckpt_dir = f"checkpoint-{state.global_step}"
@@ -756,8 +761,7 @@ def setup(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
         import flash_attn as _
 
 
-def find_all_linear_names(model, other_arguments: OtherArguments):
-    # TODO: Add targeting lm_head
+def find_all_linear_names(model, other_arguments: OtherArguments, exclude_lm_head: bool = True):
     lora_module_names = set()
     target_cls_type = torch.nn.Linear
     if other_arguments.use_qlora and other_arguments.qlora_bit_length == 8:
@@ -769,7 +773,7 @@ def find_all_linear_names(model, other_arguments: OtherArguments):
             names = name.split(".")
             lora_module_names.add(names[0] if len(names) == 1 else names[-1])
 
-    if "lm_head" in lora_module_names:  # needed for 16-bit
+    if exclude_lm_head and "lm_head" in lora_module_names:  # needed for 16-bit
         lora_module_names.remove("lm_head")
     if len(list(lora_module_names)) == 0:
         raise ValueError(
@@ -804,9 +808,7 @@ def get_model(
             raise ValueError(
                 "deepspeed is incompatible with qlora fine-tuning please try fine-tuning without deepspeed"
             )
-        compute_dtype = torch.float32
-        if training_arguments.bf16:
-            compute_dtype = torch.bfloat16
+        compute_dtype = get_torch_dtype(training_arguments)
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=other_arguments.qlora_bit_length == 4,
             load_in_8bit=other_arguments.qlora_bit_length == 8,
@@ -825,7 +827,8 @@ def get_model(
         model = prepare_model_for_kbit_training(
             model, use_gradient_checkpointing=training_arguments.gradient_checkpointing
         )
-        training_arguments.optim = "paged_adamw_32bit"
+        # TODO (chiragjn): This is disabled because resuming does not work: https://github.com/TimDettmers/bitsandbytes/issues/782
+        # training_arguments.optim = "paged_adamw_32bit"
     else:
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
@@ -850,6 +853,7 @@ def get_tokenizer(model_source: str):
             model_source,
             trust_remote_code=True,
         )
+    logging.info(f"Tokenizer's padding side is {tokenizer.padding_side}")
     special_tokens_dict = {}
     if tokenizer.pad_token is None:
         logger.info("Pad token missing, adding a pad token")
@@ -924,7 +928,7 @@ def train(
     last_checkpoint_dir = get_checkpoint_for_resume_if_any(
         training_arguments=training_arguments,
         run=run,
-        checkpoint_artifact_name=other_arguments.checkpoint_artifact_name,
+        checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
     )
 
     logger.info("Loading config ...")
@@ -959,7 +963,7 @@ def train(
     )
     if other_arguments.use_lora or other_arguments.use_qlora:
         if other_arguments.lora_target_modules == "auto":
-            modules = find_all_linear_names(model, other_arguments=other_arguments)
+            modules = find_all_linear_names(model, exclude_lm_head=True, other_arguments=other_arguments)
         else:
             modules = json.loads(other_arguments.lora_target_modules)
         logger.info(f"Modules targeted for lora are {modules}")
@@ -985,8 +989,6 @@ def train(
         logger.info("Applying peft config ...")
         other_arguments.lora_config.inference_mode = False
         model = get_peft_model(model, other_arguments.lora_config)
-
-        # TODO: Check if training in bfloat16 is stable enough
         for name, module in model.named_modules():
             if isinstance(module, LoraLayer):
                 if training_arguments.bf16:
@@ -1015,13 +1017,14 @@ def train(
         data_collator=SequenceDataCollator(tokenizer, multiple_of=8),
         # Tensor cores are used when tensor dims are multiple of 8
         callbacks=[
-            Callback(
+            MLFoundryCallback(
                 run=run,
-                checkpoint_artifact_name=other_arguments.checkpoint_artifact_name,
-                log_checkpoints_to_mlfoundry=other_arguments.log_checkpoints_to_mlfoundry,
+                checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
+                log_checkpoints=other_arguments.mlfoundry_log_checkpoints,
             )
         ],
     )
+
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)
 
     if training_arguments.world_size > 1:
@@ -1031,7 +1034,7 @@ def train(
     logger.info("Saving model...")
 
     if training_arguments.deepspeed and is_deepspeed_zero3_enabled() and EXPORT_ZERO3_CHECKPOINT_TO_FP32:
-        # TODO (chiragjn): Disabled for now
+        # TODO (chiragjn): Disabled for now. Test and Re-enable, check the half precision format
         #  Under ZeRO 3, when checkpointing, each rank saves their own part, in zero format
         #  if "stage3_gather_16bit_weights_on_model_save": true,
         #  then an additional pytorch_model.bin is saved as a 16-bit checkpoint
@@ -1062,8 +1065,8 @@ def main():
         if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
             raise RuntimeError("No GPUs detected. We need at least one gpu available for Lora/QLora finetuning!")
 
-    other_arguments.checkpoint_artifact_name = resolve_checkpoint_artifact_name(
-        other_arguments.checkpoint_artifact_name
+    other_arguments.mlfoundry_checkpoint_artifact_name = resolve_checkpoint_artifact_name(
+        other_arguments.mlfoundry_checkpoint_artifact_name
     )
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     *_, model_name = other_arguments.model_id.rsplit("/", 1)
@@ -1075,9 +1078,12 @@ def main():
     setup(training_arguments=training_arguments, other_arguments=other_arguments)
 
     run = None
-    if training_arguments.local_rank <= 0 and other_arguments.report_to_mlfoundry:
+    if training_arguments.local_rank <= 0 and other_arguments.mlfoundry_enable_reporting:
         mlfoundry_client = mlfoundry.get_client()
-        run = mlfoundry_client.create_run(ml_repo=other_arguments.ml_repo, run_name=f"finetune-{timestamp}")
+        _run_name = (
+            other_arguments.mlfoundry_run_name if other_arguments.mlfoundry_run_name else f"finetune-{timestamp}"
+        )
+        run = mlfoundry_client.create_run(ml_repo=other_arguments.mlfoundry_ml_repo, run_name=_run_name)
 
     if training_arguments.local_rank <= 0 and run:
         run.log_params(vars(other_arguments), flatten_params=True)
