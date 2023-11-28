@@ -695,31 +695,6 @@ def _maybe_set_torch_max_memory(device: int):
             torch.cuda.set_per_process_memory_fraction(frac, device=device)
 
 
-def _install_flash_attention():
-    # Install flash-attn package - needs to be compiled during runtime to avoid linking errors
-    logger.info("Installing flash-attn ...")
-    _env = os.environ.copy()
-    _env["MAX_JOBS"] = "4"
-    with subprocess.Popen(
-        [
-            "python",
-            "-m",
-            "pip",
-            "install",
-            "-q",
-            "--no-build-isolation",
-            "--no-cache-dir",
-            "-U",
-            "flash-attn==2.3.4",
-        ],
-        env=_env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    ) as process:
-        for line in process.stdout:
-            print(line.decode("utf8"))
-
-
 def _setup_logging(training_arguments: HFTrainingArguments):
     global logger
     handler = logging.StreamHandler(sys.stdout)
@@ -741,23 +716,6 @@ def setup(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
     _maybe_set_torch_max_memory(device=training_arguments.local_rank)
 
     if other_arguments.use_flash_attention:
-        if not (training_arguments.bf16 or training_arguments.fp16):
-            raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
-
-        if training_arguments.world_size > 1 and training_arguments.local_rank > 0:
-            logger.info("Waiting for main process to install flash attention ...")
-            torch.distributed.barrier()
-
-        if training_arguments.local_rank <= 0:
-            try:
-                _install_flash_attention()
-            except Exception:
-                logger.warning("flash-attn failed to install!")
-
-        if training_arguments.world_size > 1 and training_arguments.local_rank <= 0:
-            logger.info("Getting other ranks in sync with main process")
-            torch.distributed.barrier()
-
         import flash_attn as _
 
 
