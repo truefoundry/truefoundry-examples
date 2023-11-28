@@ -5,7 +5,6 @@ import logging
 import math
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -56,15 +55,14 @@ from transformers.utils import (
 from transformers.utils import logging as hf_logging_utils
 
 # TODO (chiragjn):
-#   - Add support for use_flash_attention2 / Bettertransformers / torch sdpa dispatch with dataset packing
+#   - Refactor and split code into sub modules. Make torch.distributed calls more intuitive  with accelerate and decorators
+#   - Add support for Bettertransformers / torch sdpa dispatch with dataset packing
 #   - Find optimal combinations of batch_size, gradient accumulation, gradient checkpointing to get fastest training time in the given gpu budget
 #   - Add support for dataset streaming
 #   - Add support to use Apex FusedAdam
-#   - Test support for fp16 on older GPUs
 #   - Write a script to automatically capture gpu and memory metrics with different configurations
 #   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
-#   - Add support to push to HF Hub, as well as ability to read gated models
-#   - Add support for text2text-generation
+#   - Add support to push to HF Hub
 
 
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
@@ -86,9 +84,7 @@ COMPLETION_KEY = "completion"
 @dataclass
 class HFTrainingArguments(TrainingArguments):
     def __post_init__(self):
-        if not self.fp16:
-            self.bf16 = not self.no_cuda and torch.cuda.is_available() and is_torch_bf16_gpu_available()
-            self.tf32 = not self.no_cuda and torch.cuda.is_available() and is_torch_tf32_available()
+        self.tf32 = not self.use_cpu and torch.cuda.is_available() and is_torch_tf32_available()
         if self.save_strategy == IntervalStrategy.NO:
             self.load_best_model_at_end = False
         super().__post_init__()
@@ -97,8 +93,7 @@ class HFTrainingArguments(TrainingArguments):
 @dataclass
 class OtherArguments:
     model_id: str = field(metadata={"help": "Huggingface hub model ID"})
-    # TODO (chiragjn): Make this optional, because now we have --report_to_mlfoundry
-    ml_repo: str = field(metadata={"help": "ML Repo to put the model to"})
+    mlfoundry_ml_repo: str = field(metadata={"help": "ML Repo to put the model to"})
     train_data: str = field(metadata={"help": "URL to the jsonl training dataset"})
     eval_size: Optional[float] = field(
         default=0.1,
@@ -109,7 +104,7 @@ class OtherArguments:
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
     train_on_prompt: bool = field(
-        default=False,
+        default=True,
         metadata={"help": "If to train on prompt and include it in the loss"},
     )
     use_flash_attention: bool = field(
@@ -120,32 +115,16 @@ class OtherArguments:
         default=False,
         metadata={"help": "If to use DDP - only applicable when multiple gpus are available"},
     )
-    report_to_mlfoundry: bool = field(
-        default=True,
-        metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
-    )
-    log_checkpoints_to_mlfoundry: bool = field(
-        default=True,
-        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
-    )
-    checkpoint_artifact_name: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "ML Repo artifact name to save checkpoints. \n"
-            "The artifact will be created if it does not exist under the give ML Repo"
-        },
-    )
-    # TODO (chiragjn): Add option to control max shard size
     use_lora: bool = field(
         default=False,
         metadata={"help": "If to train the model with LoRa"},
     )
     lora_r: int = field(
-        default=8,
+        default=32,
         metadata={"help": "r value for lora config"},
     )
     lora_alpha: int = field(
-        default=32,
+        default=64,
         metadata={"help": "value of alpha for lora config"},
     )
     lora_target_modules: str = field(
@@ -191,6 +170,26 @@ class OtherArguments:
         default=None,
         metadata={"help": "For quick debugging purposes, how many samples to use (default: all)"},
     )
+    mlfoundry_enable_reporting: bool = field(
+        default=True,
+        metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
+    )
+    mlfoundry_run_name: Optional[str] = field(
+        default=None,
+        metadata={"help": "Run name for mlfoundry run"},
+    )
+    mlfoundry_log_checkpoints: bool = field(
+        default=True,
+        metadata={"help": "If to log intermediate checkpoints to mlfoundry"},
+    )
+    mlfoundry_checkpoint_artifact_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "ML Repo artifact name to save checkpoints. \n"
+            "The artifact will be created if it does not exist under the give ML Repo"
+        },
+    )
+    # TODO (chiragjn): Add option to control max shard size
     cleanup_output_dir_on_start: bool = field(
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
@@ -295,10 +294,14 @@ def cleanup_checkpoints(
 
 def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     # TODO (chiragjn): We do not want anything to be offloaded to cpu or disk here!
-    # This is a known issue - https://github.com/huggingface/peft/issues/868
-    for _ in range(3):  # Yes, this is stupid but necessary
+    # This is a known issue with fix in progress
+    #   - https://github.com/huggingface/peft/pull/1063
+    #   - https://github.com/huggingface/transformers/pull/27412
+    for _ in range(
+        3
+    ):  # Yes, this is stupid but necessary till the above PRs are merged and made available in a new version
         gc.collect()
-        time.sleep(5)
+        time.sleep(3)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
@@ -306,6 +309,7 @@ def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_argumen
     logger.info("Loading model and lora layers for merging ...")
     model = AutoPeftModelForCausalLM.from_pretrained(
         training_arguments.output_dir,
+        trust_remote_code=True,
         low_cpu_mem_usage=True,
         torch_dtype=get_torch_dtype(training_arguments),
         device_map="sequential",
@@ -394,16 +398,16 @@ def filter_trainer_args_for_logging(
     return arguments
 
 
-class Callback(TrainerCallback):
+class MLFoundryCallback(TrainerCallback):
     def __init__(
         self,
         run: Optional[mlfoundry.MlFoundryRun] = None,
         checkpoint_artifact_name: Optional[str] = None,
-        log_checkpoints_to_mlfoundry: bool = True,
+        log_checkpoints: bool = True,
     ):
         self._run = run
         self._checkpoint_artifact_name = checkpoint_artifact_name
-        self._log_checkpoints_to_mlfoundry = log_checkpoints_to_mlfoundry
+        self._log_checkpoints = log_checkpoints
 
         if not self._checkpoint_artifact_name:
             logger.warning("checkpoint_artifact_name not passed. Checkpoints will not be logged to MLFoundry")
@@ -449,7 +453,7 @@ class Callback(TrainerCallback):
         if not self._run or not self._checkpoint_artifact_name:
             return
 
-        if not self._log_checkpoints_to_mlfoundry:
+        if not self._log_checkpoints:
             return
 
         ckpt_dir = f"checkpoint-{state.global_step}"
@@ -670,27 +674,94 @@ def build_dataset(train_data, eval_data, tokenizer, max_length: int, training_ar
 
 
 # --- Core Training Code ---
+def _maybe_set_custom_tempdir():
+    # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
+    _tempdir = os.getenv("TMPDIR")
+    if _tempdir:
+        if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
+            raise ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
+        else:
+            os.makedirs(_tempdir, exist_ok=True)
 
 
-def setup(training_arguments: HFTrainingArguments):
+def _maybe_set_torch_max_memory(device: int):
+    torch_per_process_memory_limit = os.getenv("TORCH_PER_PROCESS_MEMORY_LIMIT_MIB")
+    if torch_per_process_memory_limit:
+        if torch.cuda.is_available() and device >= 0:
+            torch_per_process_memory_limit = int(torch_per_process_memory_limit)
+            _, total = torch.cuda.mem_get_info()
+            frac = (torch_per_process_memory_limit * 1024 * 1024) / total
+            logger.info(f"Setting max memory limit on device {device} to {frac} ({torch_per_process_memory_limit} MiB)")
+            torch.cuda.set_per_process_memory_fraction(frac, device=device)
+
+
+def _install_flash_attention():
+    # Install flash-attn package - needs to be compiled during runtime to avoid linking errors
+    logger.info("Installing flash-attn ...")
+    _env = os.environ.copy()
+    _env["MAX_JOBS"] = "4"
+    with subprocess.Popen(
+        [
+            "python",
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "--no-build-isolation",
+            "--no-cache-dir",
+            "-U",
+            "flash-attn==2.3.4",
+        ],
+        env=_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    ) as process:
+        for line in process.stdout:
+            print(line.decode("utf8"))
+
+
+def _setup_logging(training_arguments: HFTrainingArguments):
     global logger
-    os.makedirs(CACHE_DIR, exist_ok=True)
-
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter(
         fmt=f"%(asctime)s [Rank-{training_arguments.local_rank}] %(levelname)s - %(module)s:%(funcName)s:%(lineno)d - %(message)s"
     )
     handler.setFormatter(formatter)
-
     logger.setLevel(logging.DEBUG)
     logger.addHandler(handler)
-
     hf_logging_utils.disable_default_handler()
     hf_logging_utils.add_handler(handler)
 
 
-def find_all_linear_names(model, other_arguments: OtherArguments):
+def setup(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    _setup_logging(training_arguments=training_arguments)
+    _maybe_set_custom_tempdir()
+    _maybe_set_torch_max_memory(device=training_arguments.local_rank)
+
+    if other_arguments.use_flash_attention:
+        if not (training_arguments.bf16 or training_arguments.fp16):
+            raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
+
+        if training_arguments.world_size > 1 and training_arguments.local_rank > 0:
+            logger.info("Waiting for main process to install flash attention ...")
+            torch.distributed.barrier()
+
+        if training_arguments.local_rank <= 0:
+            try:
+                _install_flash_attention()
+            except Exception:
+                logger.warning("flash-attn failed to install!")
+
+        if training_arguments.world_size > 1 and training_arguments.local_rank <= 0:
+            logger.info("Getting other ranks in sync with main process")
+            torch.distributed.barrier()
+
+        import flash_attn as _
+
+
+def find_all_linear_names(model, other_arguments: OtherArguments, exclude_lm_head: bool = True):
     lora_module_names = set()
     target_cls_type = torch.nn.Linear
     if other_arguments.use_qlora and other_arguments.qlora_bit_length == 8:
@@ -702,7 +773,7 @@ def find_all_linear_names(model, other_arguments: OtherArguments):
             names = name.split(".")
             lora_module_names.add(names[0] if len(names) == 1 else names[-1])
 
-    if "lm_head" in lora_module_names:  # needed for 16-bit
+    if exclude_lm_head and "lm_head" in lora_module_names:  # needed for 16-bit
         lora_module_names.remove("lm_head")
     if len(list(lora_module_names)) == 0:
         raise ValueError(
@@ -711,48 +782,57 @@ def find_all_linear_names(model, other_arguments: OtherArguments):
     return list(lora_module_names)
 
 
-def get_model(model_source: str, training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
+def get_model(
+    model_source: str, model_config, training_arguments: HFTrainingArguments, other_arguments: OtherArguments
+):
     logger.info("Loading model...")
     no_of_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+
     device_map = None
     if not training_arguments.deepspeed:
         if other_arguments.use_ddp and no_of_gpus > 1:
             device_map = {"": "cuda:" + str(training_arguments.local_rank)}
         else:
             device_map = "auto"
+
     model_load_kwargs = {}
+    model_load_kwargs["use_cache"] = False if training_arguments.gradient_checkpointing else True
+    if model_config.architectures and model_config.architectures[0] == "PhiForCausalLM":
+        model_load_kwargs.pop("use_cache", None)
+
     if other_arguments.use_flash_attention:
         model_load_kwargs["use_flash_attention_2"] = other_arguments.use_flash_attention
+
     if other_arguments.use_qlora:
         if training_arguments.deepspeed:
             raise ValueError(
                 "deepspeed is incompatible with qlora fine-tuning please try fine-tuning without deepspeed"
             )
+        compute_dtype = get_torch_dtype(training_arguments)
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=other_arguments.qlora_bit_length == 4,
             load_in_8bit=other_arguments.qlora_bit_length == 8,
-            bnb_4bit_compute_dtype=get_torch_dtype(training_arguments=training_arguments),
+            bnb_4bit_compute_dtype=compute_dtype,
             bnb_4bit_use_double_quant=other_arguments.use_double_quant,
             bnb_4bit_quant_type=other_arguments.bnb_4bit_quant_type,
         )
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
             trust_remote_code=True,
-            use_cache=False if training_arguments.gradient_checkpointing else True,
-            torch_dtype=get_torch_dtype(training_arguments),
+            torch_dtype=compute_dtype,
             quantization_config=bnb_config,
             device_map=device_map,
             **model_load_kwargs,
         )
-
         model = prepare_model_for_kbit_training(
             model, use_gradient_checkpointing=training_arguments.gradient_checkpointing
         )
+        # TODO (chiragjn): This is disabled because resuming does not work: https://github.com/TimDettmers/bitsandbytes/issues/782
+        # training_arguments.optim = "paged_adamw_32bit"
     else:
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
             trust_remote_code=True,
-            use_cache=False if training_arguments.gradient_checkpointing else True,
             torch_dtype=get_torch_dtype(training_arguments),
             device_map=device_map,
             **model_load_kwargs,
@@ -773,6 +853,7 @@ def get_tokenizer(model_source: str):
             model_source,
             trust_remote_code=True,
         )
+    logging.info(f"Tokenizer's padding side is {tokenizer.padding_side}")
     special_tokens_dict = {}
     if tokenizer.pad_token is None:
         logger.info("Pad token missing, adding a pad token")
@@ -818,9 +899,9 @@ def check_if_model_will_fit_only_with_gpus(
     training_arguments: HFTrainingArguments,
     other_arguments: OtherArguments,
 ):
-    config = AutoConfig.from_pretrained(other_arguments.model_id)
+    config = AutoConfig.from_pretrained(other_arguments.model_id, trust_remote_code=True)
     with init_empty_weights():
-        model = AutoModelForCausalLM.from_config(config)
+        model = AutoModelForCausalLM.from_config(config, trust_remote_code=True)
     device_map = infer_auto_device_map(model, dtype=get_torch_dtype(training_arguments))
     logger.info(f"Inferred device_map for auto settings: {device_map}")
     if any(not isinstance(v, int) for v in device_map.values()):
@@ -847,11 +928,11 @@ def train(
     last_checkpoint_dir = get_checkpoint_for_resume_if_any(
         training_arguments=training_arguments,
         run=run,
-        checkpoint_artifact_name=other_arguments.checkpoint_artifact_name,
+        checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
     )
 
     logger.info("Loading config ...")
-    model_config = AutoConfig.from_pretrained(other_arguments.model_id)
+    model_config = AutoConfig.from_pretrained(other_arguments.model_id, trust_remote_code=True)
 
     if last_checkpoint_dir:
         model_source = last_checkpoint_dir
@@ -874,10 +955,15 @@ def train(
         logger.info("Getting other ranks in sync with main process")
         torch.distributed.barrier()
 
-    model = get_model(model_source, training_arguments=training_arguments, other_arguments=other_arguments)
+    model = get_model(
+        model_source=model_source,
+        model_config=model_config,
+        training_arguments=training_arguments,
+        other_arguments=other_arguments,
+    )
     if other_arguments.use_lora or other_arguments.use_qlora:
         if other_arguments.lora_target_modules == "auto":
-            modules = find_all_linear_names(model, other_arguments=other_arguments)
+            modules = find_all_linear_names(model, exclude_lm_head=True, other_arguments=other_arguments)
         else:
             modules = json.loads(other_arguments.lora_target_modules)
         logger.info(f"Modules targeted for lora are {modules}")
@@ -903,22 +989,14 @@ def train(
         logger.info("Applying peft config ...")
         other_arguments.lora_config.inference_mode = False
         model = get_peft_model(model, other_arguments.lora_config)
-
-        # TODO: Check if training in bfloat16 is stable enough
         for name, module in model.named_modules():
             if isinstance(module, LoraLayer):
                 if training_arguments.bf16:
                     module = module.to(torch.bfloat16)
-                elif training_arguments.fp16:
-                    module = module.to(torch.float32)
-            if "norm" in name:
-                module = module.to(torch.float32)
             if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
                 if hasattr(module, "weight"):
                     if training_arguments.bf16 and module.weight.dtype == torch.float32:
                         module = module.to(torch.bfloat16)
-                    elif training_arguments.fp16:
-                        module = module.to(torch.float32)
         if training_arguments.gradient_checkpointing:
             model.enable_input_require_grads()
 
@@ -939,13 +1017,14 @@ def train(
         data_collator=SequenceDataCollator(tokenizer, multiple_of=8),
         # Tensor cores are used when tensor dims are multiple of 8
         callbacks=[
-            Callback(
+            MLFoundryCallback(
                 run=run,
-                checkpoint_artifact_name=other_arguments.checkpoint_artifact_name,
-                log_checkpoints_to_mlfoundry=other_arguments.log_checkpoints_to_mlfoundry,
+                checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
+                log_checkpoints=other_arguments.mlfoundry_log_checkpoints,
             )
         ],
     )
+
     trainer.train(resume_from_checkpoint=last_checkpoint_dir)
 
     if training_arguments.world_size > 1:
@@ -955,11 +1034,11 @@ def train(
     logger.info("Saving model...")
 
     if training_arguments.deepspeed and is_deepspeed_zero3_enabled() and EXPORT_ZERO3_CHECKPOINT_TO_FP32:
-        # TODO (chiragjn): Disabled for now
+        # TODO (chiragjn): Disabled for now. Test and Re-enable, check the half precision format
         #  Under ZeRO 3, when checkpointing, each rank saves their own part, in zero format
         #  if "stage3_gather_16bit_weights_on_model_save": true,
         #  then an additional pytorch_model.bin is saved as a 16-bit checkpoint
-        #  if we want fp32 pytorch_model.bin then we would have to export separately from the checkpoint in zero forma
+        #  if we want fp32 pytorch_model.bin then we would have to export separately from the checkpoint in zero format
         trainer.save_model(output_dir=training_arguments.output_dir)
         if training_arguments.local_rank <= 0:
             fp32_weights_path = os.path.join(training_arguments.output_dir, WEIGHTS_NAME)
@@ -986,60 +1065,25 @@ def main():
         if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
             raise RuntimeError("No GPUs detected. We need at least one gpu available for Lora/QLora finetuning!")
 
-    other_arguments.checkpoint_artifact_name = resolve_checkpoint_artifact_name(
-        other_arguments.checkpoint_artifact_name
+    other_arguments.mlfoundry_checkpoint_artifact_name = resolve_checkpoint_artifact_name(
+        other_arguments.mlfoundry_checkpoint_artifact_name
     )
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     *_, model_name = other_arguments.model_id.rsplit("/", 1)
     model_name = "-".join(["finetuned", model_name, timestamp])
     model_name = model_name.replace(".", "-")
 
-    setup(training_arguments=training_arguments)
     logger.info(f"Training Arguments: {training_arguments}")
     logger.info(f"Arguments: {other_arguments}")
-
-    # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
-    _tempdir = os.getenv("TMPDIR")
-    if _tempdir:
-        if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
-            raise ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
-        else:
-            os.makedirs(_tempdir, exist_ok=True)
-
-    # Install flash-attn package - needs to be compiled during runtime to avoid linking errors
-    if other_arguments.use_flash_attention:
-        if not (training_arguments.bf16 or training_arguments.fp16):
-            raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
-        logger.info("Installing flash-attn ...")
-        try:
-            _env = os.environ.copy()
-            _env["MAX_JOBS"] = "4"
-            with subprocess.Popen(
-                [
-                    "python",
-                    "-m",
-                    "pip",
-                    "install",
-                    "-q",
-                    "--no-build-isolation",
-                    "--no-cache-dir",
-                    "-U",
-                    "flash-attn==2.3.2",
-                ],
-                env=_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            ) as process:
-                for line in process.stdout:
-                    print(line.decode("utf8"))
-        except Exception:
-            logger.warning("flash-attn failed to install!")
-        import flash_attn as _
+    setup(training_arguments=training_arguments, other_arguments=other_arguments)
 
     run = None
-    if training_arguments.local_rank <= 0 and other_arguments.report_to_mlfoundry:
+    if training_arguments.local_rank <= 0 and other_arguments.mlfoundry_enable_reporting:
         mlfoundry_client = mlfoundry.get_client()
-        run = mlfoundry_client.create_run(ml_repo=other_arguments.ml_repo, run_name=f"finetune-{timestamp}")
+        _run_name = (
+            other_arguments.mlfoundry_run_name if other_arguments.mlfoundry_run_name else f"finetune-{timestamp}"
+        )
+        run = mlfoundry_client.create_run(ml_repo=other_arguments.mlfoundry_ml_repo, run_name=_run_name)
 
     if training_arguments.local_rank <= 0 and run:
         run.log_params(vars(other_arguments), flatten_params=True)
