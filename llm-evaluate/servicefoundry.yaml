@@ -1,0 +1,67 @@
+name: llm-eval-metrics
+type: job
+image:
+  type: build
+  build_spec:
+    type: dockerfile
+    command: >-
+      python llm-eval.py --ml_repo {{ml_repo}} --run_name {{run_name}}
+      --model_id {{model_id}} --data_uri {{eval_data_artifact_fqn}}
+      --model_dtype {{model_dtype}} --temperature {{temperature}} --top_k
+      {{top_k}} --top_p {{top_p}} --max_tokens {{max_tokens}} 
+    dockerfile_path: ./llm-evaluate/Dockerfile
+    build_context_path: ./llm-evaluate
+  build_source:
+    ref: 95a0cc258c6ff22b6d450d31d6aa964baf5c78f7
+    type: git
+    repo_url: https://github.com/truefoundry/truefoundry-examples
+    branch_name: cj_llm_eval
+mounts: []
+params:
+  - name: ml_repo
+    param_type: ml_repo
+    description: ML Repo to upload results as artifact
+  - name: run_name
+    default: auto
+    param_type: string
+    description: Name for the run
+  - name: model_id
+    param_type: string
+    description: FQN of the model version to evaluate
+  - name: eval_data_artifact_fqn
+    param_type: string
+    description: FQN of the artifact containing jsonl files to run evaluation with
+  - name: model_dtype
+    default: auto
+    param_type: string
+    description: Precision to load the model in
+  - name: temperature
+    default: '0.00001'
+    param_type: string
+    description: Temperature to use when generating text
+  - name: top_k
+    default: '-1'
+    param_type: string
+    description: Top K to use when generating text
+  - name: top_p
+    default: '1.0'
+    param_type: string
+    description: Top P to use when generating text
+  - name: max_tokens
+    default: '200'
+    param_type: string
+    description: Max tokens to generate for each example
+retries: 0
+trigger:
+  type: manual
+resources:
+  node:
+    type: node_selector
+    gpu_type: A10G
+  cpu_limit: 3
+  gpu_count: 1
+  cpu_request: 3
+  memory_limit: 14000
+  memory_request: 14000
+  ephemeral_storage_limit: 70000
+  ephemeral_storage_request: 70000
