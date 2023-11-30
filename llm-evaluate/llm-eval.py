@@ -98,7 +98,7 @@ def generate_all_completions(
             prompt = output.prompt
             generated_text = output.outputs[0].text
             generated_texts.append(generated_text)
-        df["generated_text"] = generated_text
+        df["generated_text"] = generated_texts
         new_dfs.append(df)
     return new_dfs
 
