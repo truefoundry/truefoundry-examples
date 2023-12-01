@@ -47,11 +47,7 @@ from transformers import (
 )
 from transformers.deepspeed import is_deepspeed_zero3_enabled
 from transformers.integrations import rewrite_logs
-from transformers.utils import (
-    WEIGHTS_NAME,
-    is_torch_bf16_gpu_available,
-    is_torch_tf32_available,
-)
+from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
 # TODO (chiragjn):
@@ -104,8 +100,12 @@ class OtherArguments:
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
     train_on_prompt: bool = field(
-        default=True,
+        default=False,
         metadata={"help": "If to train on prompt and include it in the loss"},
+    )
+    pad_to_multiple_of: int = field(
+        default=64,
+        metadata={"help": "Pad the sequences batch to multiple of this"},
     )
     use_flash_attention: bool = field(
         default=False,
@@ -292,19 +292,21 @@ def cleanup_checkpoints(
             shutil.rmtree(f_path)
 
 
-def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    # TODO (chiragjn): We do not want anything to be offloaded to cpu or disk here!
+def _cleanup_gpus():
+    # TODO (chiragjn): We do not want anything to be offloaded to cpu or disk otherwise merging adapter fails!
     # This is a known issue with fix in progress
     #   - https://github.com/huggingface/peft/pull/1063
     #   - https://github.com/huggingface/transformers/pull/27412
-    for _ in range(
-        3
-    ):  # Yes, this is stupid but necessary till the above PRs are merged and made available in a new version
+    # Yes, this is stupid but necessary till the above PRs are merged and made available in a new version
+    for _ in range(5):
         gc.collect()
         time.sleep(3)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
+
+
+def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     check_if_model_will_fit_only_with_gpus(training_arguments=training_arguments, other_arguments=other_arguments)
     logger.info("Loading model and lora layers for merging ...")
     model = AutoPeftModelForCausalLM.from_pretrained(
@@ -484,13 +486,13 @@ class DatasetBuilder:
         """Tokenizes text. Presently doesn't pad inputs, just returns input ids."""
         tokenized = [
             self.tokenizer(
-                prompt,
+                text,
                 return_tensors="pt",
                 padding="longest",
                 max_length=self.max_length,
                 truncation=True,
             ).input_ids
-            for prompt in texts
+            for text in texts
         ]
         return tokenized
 
@@ -527,32 +529,25 @@ class SequenceDataCollator:
     def __init__(self, tokenizer, multiple_of=None):
         self.tokenizer = tokenizer
         self.multiple_of = multiple_of
-        self.cache_count = 0
 
     def pad_to_multiple(self, tensor, value):
-        # taking advantage of tensor cores, perhaps
         multiple = self.multiple_of
-        target_length = (tensor.size(0) + multiple - 1) // multiple * multiple
-        return torch.nn.functional.pad(tensor, (0, target_length - tensor.size(0)), value=value)
+        n = tensor.size(-1)
+        target_length = (n + multiple - 1) // multiple * multiple
+        return torch.nn.functional.pad(tensor, (0, target_length - n), value=value)
 
     def __call__(self, instances):
-        input_ids, labels = tuple([instance[key] for instance in instances] for key in ("input_ids", "labels"))
-        if self.multiple_of:
-            input_ids = [self.pad_to_multiple(val, self.tokenizer.pad_token_id) for val in input_ids]
-            labels = [self.pad_to_multiple(val, IGNORE_INDEX) for val in labels]
-
+        input_ids = [instance["input_ids"] for instance in instances]
+        labels = [instance["labels"] for instance in instances]
         input_ids = torch.nn.utils.rnn.pad_sequence(
             input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
         )
         labels = torch.nn.utils.rnn.pad_sequence(
             labels, batch_first=True, padding_value=IGNORE_INDEX
         )  # -100 tells torch to ignore these tokens in loss computation.
-
-        if self.cache_count < 1:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            self.cache_count += 1
-
+        if self.multiple_of:
+            input_ids = self.pad_to_multiple(input_ids, value=self.tokenizer.pad_token_id)
+            labels = self.pad_to_multiple(labels, value=IGNORE_INDEX)
         return dict(
             input_ids=input_ids,
             labels=labels,
@@ -650,11 +645,20 @@ def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArgu
     return train_data, eval_data
 
 
-def build_dataset(train_data, eval_data, tokenizer, max_length: int, training_arguments: TrainingArguments):
+def build_dataset(
+    train_data,
+    eval_data,
+    tokenizer,
+    max_length: int,
+    training_arguments: TrainingArguments,
+    other_arguments: OtherArguments,
+):
     logger.info("Building dataset...")
     dataset_cache_path = os.path.join(CACHE_DIR, "dataset")
     if training_arguments.local_rank <= 0:
-        builder = CausalDatasetBuilder(tokenizer=tokenizer, max_length=max_length)
+        builder = CausalDatasetBuilder(
+            tokenizer=tokenizer, max_length=max_length, train_on_prompt=other_arguments.train_on_prompt
+        )
         dataset_dict = DatasetDict(train=Dataset.from_list(train_data), eval=Dataset.from_list(eval_data))
         dataset_dict = dataset_dict.map(
             builder.construct_dataset,
@@ -685,39 +689,20 @@ def _maybe_set_custom_tempdir():
 
 
 def _maybe_set_torch_max_memory(device: int):
-    torch_per_process_memory_limit = os.getenv("TORCH_PER_PROCESS_MEMORY_LIMIT_MIB")
+    torch_per_process_memory_limit = os.getenv("TORCH_PER_PROCESS_MEMORY_LIMIT")
     if torch_per_process_memory_limit:
         if torch.cuda.is_available() and device >= 0:
-            torch_per_process_memory_limit = int(torch_per_process_memory_limit)
+            torch_per_process_memory_limit = float(torch_per_process_memory_limit)
+            if torch_per_process_memory_limit <= 1.0:
+                frac = torch_per_process_memory_limit
+            else:
+                torch_per_process_memory_limit = int(torch_per_process_memory_limit)
+                frac = (torch_per_process_memory_limit * 1024 * 1024) / total
             _, total = torch.cuda.mem_get_info()
-            frac = (torch_per_process_memory_limit * 1024 * 1024) / total
             logger.info(f"Setting max memory limit on device {device} to {frac} ({torch_per_process_memory_limit} MiB)")
             torch.cuda.set_per_process_memory_fraction(frac, device=device)
-
-
-def _install_flash_attention():
-    # Install flash-attn package - needs to be compiled during runtime to avoid linking errors
-    logger.info("Installing flash-attn ...")
-    _env = os.environ.copy()
-    _env["MAX_JOBS"] = "4"
-    with subprocess.Popen(
-        [
-            "python",
-            "-m",
-            "pip",
-            "install",
-            "-q",
-            "--no-build-isolation",
-            "--no-cache-dir",
-            "-U",
-            "flash-attn==2.3.4",
-        ],
-        env=_env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    ) as process:
-        for line in process.stdout:
-            print(line.decode("utf8"))
+    else:
+        torch.cuda.set_per_process_memory_fraction(0.9, device=device)
 
 
 def _setup_logging(training_arguments: HFTrainingArguments):
@@ -741,23 +726,8 @@ def setup(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
     _maybe_set_torch_max_memory(device=training_arguments.local_rank)
 
     if other_arguments.use_flash_attention:
-        if not (training_arguments.bf16 or training_arguments.fp16):
-            raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
-
-        if training_arguments.world_size > 1 and training_arguments.local_rank > 0:
-            logger.info("Waiting for main process to install flash attention ...")
-            torch.distributed.barrier()
-
-        if training_arguments.local_rank <= 0:
-            try:
-                _install_flash_attention()
-            except Exception:
-                logger.warning("flash-attn failed to install!")
-
-        if training_arguments.world_size > 1 and training_arguments.local_rank <= 0:
-            logger.info("Getting other ranks in sync with main process")
-            torch.distributed.barrier()
-
+        # if not (training_arguments.bf16 or training_arguments.fp16):
+        #     raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
         import flash_attn as _
 
 
@@ -804,11 +774,14 @@ def get_model(
         model_load_kwargs["use_flash_attention_2"] = other_arguments.use_flash_attention
 
     if other_arguments.use_qlora:
-        if training_arguments.deepspeed:
-            raise ValueError(
-                "deepspeed is incompatible with qlora fine-tuning please try fine-tuning without deepspeed"
-            )
         compute_dtype = get_torch_dtype(training_arguments)
+        torch_dtype = torch.float32
+        if training_arguments.bf16:
+            torch_dtype = torch.bfloat16
+        elif training_arguments.fp16:
+            # https://github.com/artidoro/qlora/blob/7f4e95a68dc076bea9b3a413d2b512eca6d004e5/qlora.py#L327C9-L327C104
+            # QLoRA authors report instability when using float16
+            torch_dtype = torch.float32
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=other_arguments.qlora_bit_length == 4,
             load_in_8bit=other_arguments.qlora_bit_length == 8,
@@ -819,7 +792,7 @@ def get_model(
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
             trust_remote_code=True,
-            torch_dtype=compute_dtype,
+            torch_dtype=torch_dtype,
             quantization_config=bnb_config,
             device_map=device_map,
             **model_load_kwargs,
@@ -949,6 +922,7 @@ def train(
         tokenizer=tokenizer,
         max_length=max_length,
         training_arguments=training_arguments,
+        other_arguments=other_arguments,
     )
 
     if training_arguments.world_size > 1 and training_arguments.local_rank <= 0:
@@ -989,10 +963,16 @@ def train(
         logger.info("Applying peft config ...")
         other_arguments.lora_config.inference_mode = False
         model = get_peft_model(model, other_arguments.lora_config)
+
+        # Taken from https://github.com/artidoro/qlora/blob/7f4e95a68dc076bea9b3a413d2b512eca6d004e5/qlora.py#L396
         for name, module in model.named_modules():
             if isinstance(module, LoraLayer):
                 if training_arguments.bf16:
                     module = module.to(torch.bfloat16)
+                if "norm" in name:
+                    # TODO: This is no longer always required. For e.g. LlamaRMSProp handles half precision correctly
+                    # but right now even prepare_model_for_k_bit does it
+                    module = module.to(torch.float32)
             if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
                 if hasattr(module, "weight"):
                     if training_arguments.bf16 and module.weight.dtype == torch.float32:
@@ -1014,8 +994,7 @@ def train(
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         args=training_arguments,
-        data_collator=SequenceDataCollator(tokenizer, multiple_of=8),
-        # Tensor cores are used when tensor dims are multiple of 8
+        data_collator=SequenceDataCollator(tokenizer, multiple_of=other_arguments.pad_to_multiple_of),
         callbacks=[
             MLFoundryCallback(
                 run=run,
@@ -1075,6 +1054,13 @@ def main():
 
     logger.info(f"Training Arguments: {training_arguments}")
     logger.info(f"Arguments: {other_arguments}")
+
+    if other_arguments.use_qlora:
+        if training_arguments.deepspeed:
+            raise ValueError(
+                "deepspeed is incompatible with qlora fine-tuning please try fine-tuning without deepspeed"
+            )
+
     setup(training_arguments=training_arguments, other_arguments=other_arguments)
 
     run = None
@@ -1104,6 +1090,7 @@ def main():
             )
 
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
+    _cleanup_gpus()
 
     if training_arguments.local_rank <= 0:
         if other_arguments.use_lora or other_arguments.use_qlora:
