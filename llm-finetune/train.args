@@ -4,7 +4,7 @@
 --data_seed 42
 --do_train
 --logging_strategy steps
---logging_steps 0.1
+--logging_steps 0.05
 --num_train_epochs 1
 --per_device_train_batch_size 4
 --gradient_accumulation_steps 4
@@ -26,3 +26,4 @@
 --ddp_find_unused_parameters false
 --ddp_backend nccl
 --half_precision_backend auto
+--auto_find_batch_size true
