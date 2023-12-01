@@ -693,12 +693,13 @@ def _maybe_set_torch_max_memory(device: int):
     if torch_per_process_memory_limit:
         if torch.cuda.is_available() and device >= 0:
             torch_per_process_memory_limit = float(torch_per_process_memory_limit)
+            _, total = torch.cuda.mem_get_info()
             if torch_per_process_memory_limit <= 1.0:
                 frac = torch_per_process_memory_limit
+                torch_per_process_memory_limit = frac * total / (1024 * 1024)
             else:
                 torch_per_process_memory_limit = int(torch_per_process_memory_limit)
                 frac = (torch_per_process_memory_limit * 1024 * 1024) / total
-            _, total = torch.cuda.mem_get_info()
             logger.info(f"Setting max memory limit on device {device} to {frac} ({torch_per_process_memory_limit} MiB)")
             torch.cuda.set_per_process_memory_fraction(frac, device=device)
     else:
