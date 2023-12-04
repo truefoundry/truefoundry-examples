@@ -6,7 +6,6 @@ import math
 import os
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 import time
@@ -28,6 +27,7 @@ from huggingface_hub import scan_cache_dir
 from peft import (
     AutoPeftModelForCausalLM,
     LoraConfig,
+    PeftModel,
     get_peft_model,
     prepare_model_for_kbit_training,
 )
@@ -45,28 +45,29 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from transformers.deepspeed import is_deepspeed_zero3_enabled
 from transformers.integrations import rewrite_logs
+from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
+from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
 # TODO (chiragjn):
 #   - Refactor and split code into sub modules. Make torch.distributed calls more intuitive  with accelerate and decorators
-#   - Add support for Bettertransformers / torch sdpa dispatch with dataset packing
+#   - Try using deepspeed (with resume) for all 3 modes - qlora, lora and full
+#   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
+#   - Add support for dataset packing
 #   - Find optimal combinations of batch_size, gradient accumulation, gradient checkpointing to get fastest training time in the given gpu budget
 #   - Add support for dataset streaming
 #   - Add support to use Apex FusedAdam
-#   - Write a script to automatically capture gpu and memory metrics with different configurations
-#   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
 #   - Add support to push to HF Hub
 
-
+MLFOUNDRY_ARTIFACT_PREFIX = "artifact:"
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 THIS_DIR = os.path.abspath(os.path.dirname(__name__))
 CACHE_DIR = os.path.join(THIS_DIR, ".cache")
 EXPORT_ZERO3_CHECKPOINT_TO_FP32 = False
-logger = logging.getLogger("finetune")
+logger = logging.getLogger("truefoundry-finetune")
 
 IGNORE_INDEX = -100  # -100 is the default ignore index in CrossEntropyLoss
 DEFAULT_PAD_TOKEN = "[PAD]"
@@ -83,13 +84,15 @@ class HFTrainingArguments(TrainingArguments):
         self.tf32 = not self.use_cpu and torch.cuda.is_available() and is_torch_tf32_available()
         if self.save_strategy == IntervalStrategy.NO:
             self.load_best_model_at_end = False
+        _resume = self.resume_from_checkpoint
+        if _resume and _resume.strip().lower() in ("true", "false"):
+            self.resume_from_checkpoint = _resume.strip().lower() == "true"
         super().__post_init__()
 
 
 @dataclass
 class OtherArguments:
     model_id: str = field(metadata={"help": "Huggingface hub model ID"})
-    mlfoundry_ml_repo: str = field(metadata={"help": "ML Repo to put the model to"})
     train_data: str = field(metadata={"help": "URL to the jsonl training dataset"})
     eval_size: Optional[float] = field(
         default=0.1,
@@ -174,6 +177,7 @@ class OtherArguments:
         default=True,
         metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
     )
+    mlfoundry_ml_repo: Optional[str] = field(default=None, metadata={"help": "ML Repo to put the model to"})
     mlfoundry_run_name: Optional[str] = field(
         default=None,
         metadata={"help": "Run name for mlfoundry run"},
@@ -189,7 +193,6 @@ class OtherArguments:
             "The artifact will be created if it does not exist under the give ML Repo"
         },
     )
-    # TODO (chiragjn): Add option to control max shard size
     cleanup_output_dir_on_start: bool = field(
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
@@ -209,7 +212,22 @@ def get_torch_dtype(training_arguments: HFTrainingArguments):
     return torch_dtype
 
 
-# --- Model checkpointing and logging utils ---
+# --- Model checkpointing, saving and logging utils ---
+
+
+def _is_mlfoundry_artifact(value: str):
+    # TODO (chiragjn): This should be made more strict
+    if value.startswith(MLFOUNDRY_ARTIFACT_PREFIX):
+        return True
+
+
+def _download_mlfoundry_artifact(artifact_version_fqn: str, download_dir: str, move_to: Optional[str] = None):
+    client = mlfoundry.get_client()
+    artifact_version = client.get_artifact_version_by_fqn(artifact_version_fqn)
+    files_dir = artifact_version.download(download_dir)
+    if move_to:
+        files_dir = shutil.move(files_dir, move_to)
+    return files_dir
 
 
 def resolve_checkpoint_artifact_name(
@@ -223,22 +241,19 @@ def resolve_checkpoint_artifact_name(
     return None
 
 
-def download_last_checkpoint_if_present(
-    run: mlfoundry.MlFoundryRun, checkpoint_artifact_name: str, local_dir: str
-) -> Optional[str]:
+def download_last_checkpoint_if_present(ml_repo: str, checkpoint_artifact_name: str, local_dir: str) -> Optional[str]:
     mlfoundry_client = mlfoundry.get_client()
     try:
         # TODO (chiragjn): We can use `:latest` tag
         latest_checkpoint_artifact = next(
-            mlfoundry_client.list_artifact_versions(ml_repo=run.ml_repo, name=checkpoint_artifact_name)
+            mlfoundry_client.list_artifact_versions(ml_repo=ml_repo, name=checkpoint_artifact_name)
         )
     except StopIteration:
         logger.info(
-            f"No previous checkpoints found at artifact={checkpoint_artifact_name!r} in run={run.ml_repo!r}",
+            f"No previous checkpoints found at artifact={checkpoint_artifact_name!r} in ml_repo={ml_repo!r}",
         )
         return
-    # TODO: We should have specific exception to identify if the artifact
-    #   does not exist
+    # TODO: We should have specific exception to identify if the artifact does not exist
     except Exception as ex:
         logger.info("No previous checkpoints found. Message=%s", ex)
         return
@@ -249,29 +264,54 @@ def download_last_checkpoint_if_present(
         latest_checkpoint_artifact.step,
     )
     os.makedirs(local_dir, exist_ok=True)
-    local_dir = os.path.join(local_dir, f"checkpoint-{latest_checkpoint_artifact.step}")
+    checkpoint_dir = os.path.join(local_dir, f"checkpoint-{latest_checkpoint_artifact.step}")
     with tempfile.TemporaryDirectory() as temp_dir:
-        path = latest_checkpoint_artifact.download(temp_dir)
-        shutil.move(path, local_dir)
-    return local_dir
+        _download_mlfoundry_artifact(
+            artifact_version_fqn=latest_checkpoint_artifact.fqn, download_dir=temp_dir, move_to=checkpoint_dir
+        )
+    return checkpoint_dir
 
 
 def get_checkpoint_for_resume_if_any(
     training_arguments: HFTrainingArguments,
-    run: Optional[mlfoundry.MlFoundryRun],
-    checkpoint_artifact_name: Optional[str] = None,
+    other_arguments: OtherArguments,
 ) -> Optional[str]:
     last_checkpoint_info_path = os.path.join(CACHE_DIR, "last_checkpoint_info.json")
     last_checkpoint_dir = None
     if training_arguments.local_rank <= 0:
-        if run:
-            logger.info("Checking for any past checkpoints...")
-            if checkpoint_artifact_name:
+        check_mlfoundry = False
+        # resume_from_checkpoint can be None/true/false/string, None is default
+        if training_arguments.resume_from_checkpoint is None:
+            check_mlfoundry = True
+        elif isinstance(training_arguments.resume_from_checkpoint, str):
+            if os.path.exists(training_arguments.resume_from_checkpoint):
+                last_checkpoint_dir = training_arguments.resume_from_checkpoint
+
+            # TODO (chiragjn): Add support for resuming from an already saved checkpoint outside of the job run
+            #   Although this is risky, because all other args (model, data, state) should remain same for a "correct" resume
+            #   Note: Instead if we just want to resume from last checkpoint of the same job run then just use --mlfoundry_enable_reporting true --mlfoundry_checkpoint_artifact_name <name>
+            # elif _is_mlfoundry_artifact(training_arguments.resume_from_checkpoint):
+            #     _download_mlfoundry_artifact(...)
+
+        elif training_arguments.resume_from_checkpoint is True:
+            # Try locating latest checkpoint from output dir first
+            if os.path.exists(training_arguments.output_dir):
+                possible_last_checkpoint_dir = get_last_checkpoint(training_arguments.output_dir)
+                if possible_last_checkpoint_dir:
+                    last_checkpoint_dir = possible_last_checkpoint_dir
+
+            if not last_checkpoint_dir:
+                check_mlfoundry = True
+
+        if check_mlfoundry and other_arguments.mlfoundry_enable_reporting:
+            logger.info("Checking for any past checkpoints from same job run...")
+            if other_arguments.mlfoundry_checkpoint_artifact_name:
                 last_checkpoint_dir = download_last_checkpoint_if_present(
-                    run,
-                    checkpoint_artifact_name=checkpoint_artifact_name,
+                    ml_repo=other_arguments.mlfoundry_ml_repo,
+                    checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
                     local_dir=training_arguments.output_dir,
                 )
+
         with open(last_checkpoint_info_path, "w") as f:
             last_checkpoint_info = {"last_checkpoint_dir": last_checkpoint_dir}
             json.dump(last_checkpoint_info, f)
@@ -285,6 +325,7 @@ def get_checkpoint_for_resume_if_any(
 def cleanup_checkpoints(
     training_arguments: HFTrainingArguments,
 ):
+    return
     logger.info("Cleaning up older checkpoints...")
     for f in os.listdir(training_arguments.output_dir):
         f_path = os.path.join(training_arguments.output_dir, f)
@@ -297,7 +338,7 @@ def _cleanup_gpus():
     # This is a known issue with fix in progress
     #   - https://github.com/huggingface/peft/pull/1063
     #   - https://github.com/huggingface/transformers/pull/27412
-    # Yes, this is stupid but necessary till the above PRs are merged and made available in a new version
+    # Yes, sleeping is stupid but necessary till the above PRs are merged and made available in a new version
     for _ in range(5):
         gc.collect()
         time.sleep(3)
@@ -578,14 +619,9 @@ def load_data(path, max_num_samples: Optional[int] = None):
     n = max_num_samples if max_num_samples else -1
     count = 0
     with tempfile.TemporaryDirectory() as download_dir:
-        if path.startswith("mlfoundry://") or path.startswith("artifact:"):
+        if _is_mlfoundry_artifact(path):
             logger.info("Downloading artifact from mlfoundry")
-            client = mlfoundry.get_client()
-            if path.startswith("mlfoundry://"):
-                _, artifact_version_fqn = path.split("mlfoundry://", 1)
-            else:
-                artifact_version_fqn = path
-            download_path = client.get_artifact_version_by_fqn(artifact_version_fqn).download(download_dir)
+            download_path = _download_mlfoundry_artifact(artifact_version_fqn=path, download_dir=download_dir)
             lines = _read_lines_from_files(download_path)
         elif path.startswith("snowflake://"):
             from utils import get_data_from_snowflake_table
@@ -678,6 +714,8 @@ def build_dataset(
 
 
 # --- Core Training Code ---
+
+
 def _maybe_set_custom_tempdir():
     # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
     _tempdir = os.getenv("TMPDIR")
@@ -827,7 +865,7 @@ def get_tokenizer(model_source: str):
             model_source,
             trust_remote_code=True,
         )
-    logging.info(f"Tokenizer's padding side is {tokenizer.padding_side}")
+    logger.info(f"Tokenizer's padding side is {tokenizer.padding_side}")
     special_tokens_dict = {}
     if tokenizer.pad_token is None:
         logger.info("Pad token missing, adding a pad token")
@@ -901,8 +939,7 @@ def train(
 
     last_checkpoint_dir = get_checkpoint_for_resume_if_any(
         training_arguments=training_arguments,
-        run=run,
-        checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
+        other_arguments=other_arguments,
     )
 
     logger.info("Loading config ...")
@@ -936,48 +973,64 @@ def train(
         training_arguments=training_arguments,
         other_arguments=other_arguments,
     )
-    if other_arguments.use_lora or other_arguments.use_qlora:
-        if other_arguments.lora_target_modules == "auto":
-            modules = find_all_linear_names(model, exclude_lm_head=True, other_arguments=other_arguments)
-        else:
-            modules = json.loads(other_arguments.lora_target_modules)
-        logger.info(f"Modules targeted for lora are {modules}")
-
-        other_arguments.lora_config = LoraConfig(
-            **dict(
-                r=other_arguments.lora_r,
-                lora_alpha=other_arguments.lora_alpha,
-                target_modules=modules,
-                lora_dropout=other_arguments.lora_dropout,
-                bias=other_arguments.lora_bias,
-                task_type="CAUSAL_LM",
-            )
-        )
-
     if num_new_tokens > 0:
+        if last_checkpoint_dir:
+            logger.warning(
+                "Got num_new_tokens > 0 when loading from checkpoint. "
+                "This is unexpected as the tokenizer saved with the checkpoint "
+                "should already have the new tokens added"
+            )
         logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
         # There are some strategies that also assign unk token as pad token
         # We can also assign the average of all embeddings here for new tokens that got added
-
     if other_arguments.use_lora or other_arguments.use_qlora:
-        logger.info("Applying peft config ...")
-        other_arguments.lora_config.inference_mode = False
-        model = get_peft_model(model, other_arguments.lora_config)
+        if last_checkpoint_dir:
+            model = PeftModel.from_pretrained(model, model_source, is_trainable=True)
+        else:
+            if other_arguments.lora_target_modules == "auto":
+                modules = find_all_linear_names(model, exclude_lm_head=True, other_arguments=other_arguments)
+            else:
+                modules = json.loads(other_arguments.lora_target_modules)
+            logger.info(f"Modules targeted for lora are {modules}")
 
+            other_arguments.lora_config = LoraConfig(
+                **dict(
+                    r=other_arguments.lora_r,
+                    lora_alpha=other_arguments.lora_alpha,
+                    target_modules=modules,
+                    lora_dropout=other_arguments.lora_dropout,
+                    bias=other_arguments.lora_bias,
+                    task_type="CAUSAL_LM",
+                )
+            )
+            logger.info("Applying peft config ...")
+            other_arguments.lora_config.inference_mode = False
+            model = get_peft_model(model, other_arguments.lora_config)
+
+        # for name, p in model.named_parameters():
+        #     print(name, p.dtype, p.requires_grad)
+        # breakpoint()
         # Taken from https://github.com/artidoro/qlora/blob/7f4e95a68dc076bea9b3a413d2b512eca6d004e5/qlora.py#L396
         for name, module in model.named_modules():
             if isinstance(module, LoraLayer):
                 if training_arguments.bf16:
                     module = module.to(torch.bfloat16)
                 if "norm" in name:
-                    # TODO: This is no longer always required. For e.g. LlamaRMSProp handles half precision correctly
+                    # TODO (chiragjn): This is no longer always required. For e.g. LlamaRMSProp handles half precision correctly
                     # but right now even prepare_model_for_k_bit does it
                     module = module.to(torch.float32)
             if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
                 if hasattr(module, "weight"):
                     if training_arguments.bf16 and module.weight.dtype == torch.float32:
+                        # This is experimental, normally qlora repo uses it but some others don't recommend it. So far we haven't see major problems.
+                        # Note this downcasting is not recommended when using float16, that can cause numerical instability
                         module = module.to(torch.bfloat16)
+
+        # for name, p in model.named_parameters():
+        #     print(name, p.dtype, p.requires_grad)
+        # breakpoint()
+
         if training_arguments.gradient_checkpointing:
             model.enable_input_require_grads()
 
@@ -1059,7 +1112,7 @@ def main():
     if other_arguments.use_qlora:
         if training_arguments.deepspeed:
             raise ValueError(
-                "deepspeed is incompatible with qlora fine-tuning please try fine-tuning without deepspeed"
+                "deepspeed is currently not supported with qlora fine-tuning please try fine-tuning without deepspeed"
             )
 
     setup(training_arguments=training_arguments, other_arguments=other_arguments)
