@@ -1008,9 +1008,6 @@ def train(
             other_arguments.lora_config.inference_mode = False
             model = get_peft_model(model, other_arguments.lora_config)
 
-        # for name, p in model.named_parameters():
-        #     print(name, p.dtype, p.requires_grad)
-        # breakpoint()
         # Taken from https://github.com/artidoro/qlora/blob/7f4e95a68dc076bea9b3a413d2b512eca6d004e5/qlora.py#L396
         for name, module in model.named_modules():
             if isinstance(module, LoraLayer):
@@ -1026,10 +1023,6 @@ def train(
                         # This is experimental, normally qlora repo uses it but some others don't recommend it. So far we haven't see major problems.
                         # Note this downcasting is not recommended when using float16, that can cause numerical instability
                         module = module.to(torch.bfloat16)
-
-        # for name, p in model.named_parameters():
-        #     print(name, p.dtype, p.requires_grad)
-        # breakpoint()
 
         if training_arguments.gradient_checkpointing:
             model.enable_input_require_grads()
