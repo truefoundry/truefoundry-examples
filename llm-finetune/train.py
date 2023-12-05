@@ -716,6 +716,13 @@ def build_dataset(
 # --- Core Training Code ---
 
 
+def _log_model_parameters(model):
+    logger.info("=== Model Parameters ===")
+    for name, parameter in model.named_parameters():
+        print("\t", name, parameter.dtype, parameter.device, parameter.requires_grad)
+    logger.info("========================")
+
+
 def _maybe_set_custom_tempdir():
     # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
     _tempdir = os.getenv("TMPDIR")
@@ -792,18 +799,13 @@ def find_all_linear_names(model, other_arguments: OtherArguments, exclude_lm_hea
 
 
 def get_model(
-    model_source: str, model_config, training_arguments: HFTrainingArguments, other_arguments: OtherArguments
+    model_source: str,
+    model_config,
+    training_arguments: HFTrainingArguments,
+    other_arguments: OtherArguments,
+    device_map=None,
 ):
     logger.info("Loading model...")
-    no_of_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
-
-    device_map = None
-    if not training_arguments.deepspeed:
-        if other_arguments.use_ddp and no_of_gpus > 1:
-            device_map = {"": "cuda:" + str(training_arguments.local_rank)}
-        else:
-            device_map = "auto"
-
     model_load_kwargs = {}
     model_load_kwargs["use_cache"] = False if training_arguments.gradient_checkpointing else True
     if model_config.architectures and model_config.architectures[0] == "PhiForCausalLM":
@@ -836,9 +838,11 @@ def get_model(
             device_map=device_map,
             **model_load_kwargs,
         )
+        _log_model_parameters(model)
         model = prepare_model_for_kbit_training(
             model, use_gradient_checkpointing=training_arguments.gradient_checkpointing
         )
+        _log_model_parameters(model)
         # TODO (chiragjn): This is disabled because resuming does not work: https://github.com/TimDettmers/bitsandbytes/issues/782
         # training_arguments.optim = "paged_adamw_32bit"
     else:
@@ -855,6 +859,63 @@ def get_model(
     return model
 
 
+def get_peft_wrapped_model(
+    model,
+    training_arguments: HFTrainingArguments,
+    other_arguments: OtherArguments,
+    _device_map=None,
+    _checkpoint_dir: Optional[str] = None,
+):
+    # if _checkpoint_dir:
+    #     model = PeftModel.from_pretrained(
+    #         model=model,
+    #         model_id=checkpoint_dir,
+    #         is_trainable=True,
+    #         device_map=_device_map
+    #     )
+    # else:
+    if other_arguments.lora_target_modules == "auto":
+        modules = find_all_linear_names(model, exclude_lm_head=True, other_arguments=other_arguments)
+    else:
+        modules = json.loads(other_arguments.lora_target_modules)
+    logger.info(f"Modules targeted for lora are {modules}")
+
+    other_arguments.lora_config = LoraConfig(
+        **dict(
+            r=other_arguments.lora_r,
+            lora_alpha=other_arguments.lora_alpha,
+            target_modules=modules,
+            lora_dropout=other_arguments.lora_dropout,
+            bias=other_arguments.lora_bias,
+            task_type="CAUSAL_LM",
+        )
+    )
+    logger.info("Applying peft config ...")
+    other_arguments.lora_config.inference_mode = False
+    model = get_peft_model(model, other_arguments.lora_config)
+
+    # Taken from https://github.com/artidoro/qlora/blob/7f4e95a68dc076bea9b3a413d2b512eca6d004e5/qlora.py#L396
+    for name, module in model.named_modules():
+        if isinstance(module, LoraLayer):
+            if training_arguments.bf16:
+                module = module.to(torch.bfloat16)
+            if "norm" in name:
+                # TODO (chiragjn): This is no longer always required. For e.g. LlamaRMSProp handles half precision correctly
+                # but right now even prepare_model_for_k_bit does it
+                module = module.to(torch.float32)
+        if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
+            if hasattr(module, "weight"):
+                if training_arguments.bf16 and module.weight.dtype == torch.float32:
+                    # This is experimental, normally qlora repo uses it but some others don't recommend it. So far we haven't see major problems.
+                    # Note this downcasting is not recommended when using float16, that can cause numerical instability
+                    module = module.to(torch.bfloat16)
+
+    model.enable_input_require_grads()
+    model.print_trainable_parameters()
+    _log_model_parameters(model)
+    return model
+
+
 def get_tokenizer(model_source: str):
     logger.info("Loading tokenizer...")
     try:
@@ -866,6 +927,7 @@ def get_tokenizer(model_source: str):
             trust_remote_code=True,
         )
     logger.info(f"Tokenizer's padding side is {tokenizer.padding_side}")
+    # There are some strategies that also assign unk token as pad token
     special_tokens_dict = {}
     if tokenizer.pad_token is None:
         logger.info("Pad token missing, adding a pad token")
@@ -967,67 +1029,46 @@ def train(
         logger.info("Getting other ranks in sync with main process")
         torch.distributed.barrier()
 
+    no_of_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    device_map = None
+    if not training_arguments.deepspeed:
+        if other_arguments.use_ddp and no_of_gpus > 1:
+            device_map = {"": "cuda:" + str(training_arguments.local_rank)}
+        else:
+            device_map = "auto"
+
+    # TODO (chiragjn): Ideally we should be loading from checkpoint when available because we resize embeddings in some cases
+    #   but because of device movement bugs with peft we are loading the pretrained model and re-applying peft config
+    #   Details:
+    #   Currently AutoModelForCausalLM.from_pretrained can load adapters from checkpoint but it does not return an instance of PeftModel,
+    #   but some training code relies on checking if instance is PeftModel type
+    #   so we want to re-load the model as PeftModel instance using the above PeftModel.from_pretrained
+    #   Now the problem is when we load using AutoModelForCausalLM from a checkpoint it already has the lora layers in it
+    #   so PeftModel.from_pretrained updates the lora layers and re-inits them
+    #   (re-init is not a problem because resume_from_checkpoint in trainer should restore weights)
+    #   However the layer updating code is broken that it does not move the layers to correct device.
+    #   So you'll get base layers on gpu and lora layers on cpu crashing the code.
+    #   There is a massive refactor in peft which has mostly solved this but unreleased as of writing: https://github.com/huggingface/peft/commit/5a3a5acff2d679358251742564f7b12efbee3a41
+    #   So for now, we always load the base model from pretrained version, resize embeddings is tokenizer from checkpoint has more tokens, and re-apply the peft config from scratch
     model = get_model(
-        model_source=model_source,
+        model_source=other_arguments.model_id,  # This is not a bug
         model_config=model_config,
+        device_map=device_map,
         training_arguments=training_arguments,
         other_arguments=other_arguments,
     )
-    if num_new_tokens > 0:
-        if last_checkpoint_dir:
-            logger.warning(
-                "Got num_new_tokens > 0 when loading from checkpoint. "
-                "This is unexpected as the tokenizer saved with the checkpoint "
-                "should already have the new tokens added"
-            )
+    # TODO (chiragjn): If there are new tokens added, check if we want grads to be enabled on embedding and lm head.
+    #   prepare_model_for_k_bit actually disables grad on embedding and lm head
+    if model.get_input_embeddings().num_embeddings < len(tokenizer):
         logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
-        # There are some strategies that also assign unk token as pad token
-        # We can also assign the average of all embeddings here for new tokens that got added
+
     if other_arguments.use_lora or other_arguments.use_qlora:
-        if last_checkpoint_dir:
-            model = PeftModel.from_pretrained(model, model_source, is_trainable=True)
-        else:
-            if other_arguments.lora_target_modules == "auto":
-                modules = find_all_linear_names(model, exclude_lm_head=True, other_arguments=other_arguments)
-            else:
-                modules = json.loads(other_arguments.lora_target_modules)
-            logger.info(f"Modules targeted for lora are {modules}")
-
-            other_arguments.lora_config = LoraConfig(
-                **dict(
-                    r=other_arguments.lora_r,
-                    lora_alpha=other_arguments.lora_alpha,
-                    target_modules=modules,
-                    lora_dropout=other_arguments.lora_dropout,
-                    bias=other_arguments.lora_bias,
-                    task_type="CAUSAL_LM",
-                )
-            )
-            logger.info("Applying peft config ...")
-            other_arguments.lora_config.inference_mode = False
-            model = get_peft_model(model, other_arguments.lora_config)
-
-        # Taken from https://github.com/artidoro/qlora/blob/7f4e95a68dc076bea9b3a413d2b512eca6d004e5/qlora.py#L396
-        for name, module in model.named_modules():
-            if isinstance(module, LoraLayer):
-                if training_arguments.bf16:
-                    module = module.to(torch.bfloat16)
-                if "norm" in name:
-                    # TODO (chiragjn): This is no longer always required. For e.g. LlamaRMSProp handles half precision correctly
-                    # but right now even prepare_model_for_k_bit does it
-                    module = module.to(torch.float32)
-            if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
-                if hasattr(module, "weight"):
-                    if training_arguments.bf16 and module.weight.dtype == torch.float32:
-                        # This is experimental, normally qlora repo uses it but some others don't recommend it. So far we haven't see major problems.
-                        # Note this downcasting is not recommended when using float16, that can cause numerical instability
-                        module = module.to(torch.bfloat16)
-
-        if training_arguments.gradient_checkpointing:
-            model.enable_input_require_grads()
-
-        model.print_trainable_parameters()
+        model = get_peft_wrapped_model(
+            model,
+            training_arguments=training_arguments,
+            other_arguments=other_arguments,
+        )
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -1102,10 +1143,11 @@ def main():
     logger.info(f"Training Arguments: {training_arguments}")
     logger.info(f"Arguments: {other_arguments}")
 
-    if other_arguments.use_qlora:
+    if other_arguments.use_lora or other_arguments.use_qlora:
+        # TODO (chiragjn): Support LoRA and QLoRA with deepspeed
         if training_arguments.deepspeed:
             raise ValueError(
-                "deepspeed is currently not supported with qlora fine-tuning please try fine-tuning without deepspeed"
+                "deepspeed is currently not supported with lora/qlora fine-tuning please try fine-tuning without deepspeed"
             )
 
     setup(training_arguments=training_arguments, other_arguments=other_arguments)
