@@ -6,7 +6,6 @@ import math
 import os
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 import time
@@ -28,6 +27,7 @@ from huggingface_hub import scan_cache_dir
 from peft import (
     AutoPeftModelForCausalLM,
     LoraConfig,
+    PeftModel,
     get_peft_model,
     prepare_model_for_kbit_training,
 )
@@ -45,32 +45,29 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from transformers.deepspeed import is_deepspeed_zero3_enabled
 from transformers.integrations import rewrite_logs
-from transformers.utils import (
-    WEIGHTS_NAME,
-    is_torch_bf16_gpu_available,
-    is_torch_tf32_available,
-)
+from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
+from transformers.trainer_utils import get_last_checkpoint
+from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
 
 # TODO (chiragjn):
 #   - Refactor and split code into sub modules. Make torch.distributed calls more intuitive  with accelerate and decorators
-#   - Add support for Bettertransformers / torch sdpa dispatch with dataset packing
+#   - Try using deepspeed (with resume) for all 3 modes - qlora, lora and full
+#   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
+#   - Add support for dataset packing
 #   - Find optimal combinations of batch_size, gradient accumulation, gradient checkpointing to get fastest training time in the given gpu budget
 #   - Add support for dataset streaming
 #   - Add support to use Apex FusedAdam
-#   - Write a script to automatically capture gpu and memory metrics with different configurations
-#   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
 #   - Add support to push to HF Hub
 
-
+MLFOUNDRY_ARTIFACT_PREFIX = "artifact:"
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 THIS_DIR = os.path.abspath(os.path.dirname(__name__))
 CACHE_DIR = os.path.join(THIS_DIR, ".cache")
 EXPORT_ZERO3_CHECKPOINT_TO_FP32 = False
-logger = logging.getLogger("finetune")
+logger = logging.getLogger("truefoundry-finetune")
 
 IGNORE_INDEX = -100  # -100 is the default ignore index in CrossEntropyLoss
 DEFAULT_PAD_TOKEN = "[PAD]"
@@ -87,13 +84,15 @@ class HFTrainingArguments(TrainingArguments):
         self.tf32 = not self.use_cpu and torch.cuda.is_available() and is_torch_tf32_available()
         if self.save_strategy == IntervalStrategy.NO:
             self.load_best_model_at_end = False
+        _resume = self.resume_from_checkpoint
+        if _resume and _resume.strip().lower() in ("true", "false"):
+            self.resume_from_checkpoint = _resume.strip().lower() == "true"
         super().__post_init__()
 
 
 @dataclass
 class OtherArguments:
     model_id: str = field(metadata={"help": "Huggingface hub model ID"})
-    mlfoundry_ml_repo: str = field(metadata={"help": "ML Repo to put the model to"})
     train_data: str = field(metadata={"help": "URL to the jsonl training dataset"})
     eval_size: Optional[float] = field(
         default=0.1,
@@ -104,8 +103,12 @@ class OtherArguments:
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
     )
     train_on_prompt: bool = field(
-        default=True,
+        default=False,
         metadata={"help": "If to train on prompt and include it in the loss"},
+    )
+    pad_to_multiple_of: int = field(
+        default=64,
+        metadata={"help": "Pad the sequences batch to multiple of this"},
     )
     use_flash_attention: bool = field(
         default=False,
@@ -174,6 +177,7 @@ class OtherArguments:
         default=True,
         metadata={"help": "Use mlfoundry to log metrics, checkpoints and model"},
     )
+    mlfoundry_ml_repo: Optional[str] = field(default=None, metadata={"help": "ML Repo to put the model to"})
     mlfoundry_run_name: Optional[str] = field(
         default=None,
         metadata={"help": "Run name for mlfoundry run"},
@@ -189,7 +193,6 @@ class OtherArguments:
             "The artifact will be created if it does not exist under the give ML Repo"
         },
     )
-    # TODO (chiragjn): Add option to control max shard size
     cleanup_output_dir_on_start: bool = field(
         default=False,
         metadata={"help": "Cleanup output dir at the start of training run"},
@@ -209,7 +212,22 @@ def get_torch_dtype(training_arguments: HFTrainingArguments):
     return torch_dtype
 
 
-# --- Model checkpointing and logging utils ---
+# --- Model checkpointing, saving and logging utils ---
+
+
+def _is_mlfoundry_artifact(value: str):
+    # TODO (chiragjn): This should be made more strict
+    if value.startswith(MLFOUNDRY_ARTIFACT_PREFIX):
+        return True
+
+
+def _download_mlfoundry_artifact(artifact_version_fqn: str, download_dir: str, move_to: Optional[str] = None):
+    client = mlfoundry.get_client()
+    artifact_version = client.get_artifact_version_by_fqn(artifact_version_fqn)
+    files_dir = artifact_version.download(download_dir)
+    if move_to:
+        files_dir = shutil.move(files_dir, move_to)
+    return files_dir
 
 
 def resolve_checkpoint_artifact_name(
@@ -223,22 +241,19 @@ def resolve_checkpoint_artifact_name(
     return None
 
 
-def download_last_checkpoint_if_present(
-    run: mlfoundry.MlFoundryRun, checkpoint_artifact_name: str, local_dir: str
-) -> Optional[str]:
+def download_last_checkpoint_if_present(ml_repo: str, checkpoint_artifact_name: str, local_dir: str) -> Optional[str]:
     mlfoundry_client = mlfoundry.get_client()
     try:
         # TODO (chiragjn): We can use `:latest` tag
         latest_checkpoint_artifact = next(
-            mlfoundry_client.list_artifact_versions(ml_repo=run.ml_repo, name=checkpoint_artifact_name)
+            mlfoundry_client.list_artifact_versions(ml_repo=ml_repo, name=checkpoint_artifact_name)
         )
     except StopIteration:
         logger.info(
-            f"No previous checkpoints found at artifact={checkpoint_artifact_name!r} in run={run.ml_repo!r}",
+            f"No previous checkpoints found at artifact={checkpoint_artifact_name!r} in ml_repo={ml_repo!r}",
         )
         return
-    # TODO: We should have specific exception to identify if the artifact
-    #   does not exist
+    # TODO: We should have specific exception to identify if the artifact does not exist
     except Exception as ex:
         logger.info("No previous checkpoints found. Message=%s", ex)
         return
@@ -249,29 +264,54 @@ def download_last_checkpoint_if_present(
         latest_checkpoint_artifact.step,
     )
     os.makedirs(local_dir, exist_ok=True)
-    local_dir = os.path.join(local_dir, f"checkpoint-{latest_checkpoint_artifact.step}")
+    checkpoint_dir = os.path.join(local_dir, f"checkpoint-{latest_checkpoint_artifact.step}")
     with tempfile.TemporaryDirectory() as temp_dir:
-        path = latest_checkpoint_artifact.download(temp_dir)
-        shutil.move(path, local_dir)
-    return local_dir
+        _download_mlfoundry_artifact(
+            artifact_version_fqn=latest_checkpoint_artifact.fqn, download_dir=temp_dir, move_to=checkpoint_dir
+        )
+    return checkpoint_dir
 
 
 def get_checkpoint_for_resume_if_any(
     training_arguments: HFTrainingArguments,
-    run: Optional[mlfoundry.MlFoundryRun],
-    checkpoint_artifact_name: Optional[str] = None,
+    other_arguments: OtherArguments,
 ) -> Optional[str]:
     last_checkpoint_info_path = os.path.join(CACHE_DIR, "last_checkpoint_info.json")
     last_checkpoint_dir = None
     if training_arguments.local_rank <= 0:
-        if run:
-            logger.info("Checking for any past checkpoints...")
-            if checkpoint_artifact_name:
+        check_mlfoundry = False
+        # resume_from_checkpoint can be None/true/false/string, None is default
+        if training_arguments.resume_from_checkpoint is None:
+            check_mlfoundry = True
+        elif isinstance(training_arguments.resume_from_checkpoint, str):
+            if os.path.exists(training_arguments.resume_from_checkpoint):
+                last_checkpoint_dir = training_arguments.resume_from_checkpoint
+
+            # TODO (chiragjn): Add support for resuming from an already saved checkpoint outside of the job run
+            #   Although this is risky, because all other args (model, data, state) should remain same for a "correct" resume
+            #   Note: Instead if we just want to resume from last checkpoint of the same job run then just use --mlfoundry_enable_reporting true --mlfoundry_checkpoint_artifact_name <name>
+            # elif _is_mlfoundry_artifact(training_arguments.resume_from_checkpoint):
+            #     _download_mlfoundry_artifact(...)
+
+        elif training_arguments.resume_from_checkpoint is True:
+            # Try locating latest checkpoint from output dir first
+            if os.path.exists(training_arguments.output_dir):
+                possible_last_checkpoint_dir = get_last_checkpoint(training_arguments.output_dir)
+                if possible_last_checkpoint_dir:
+                    last_checkpoint_dir = possible_last_checkpoint_dir
+
+            if not last_checkpoint_dir:
+                check_mlfoundry = True
+
+        if check_mlfoundry and other_arguments.mlfoundry_enable_reporting:
+            logger.info("Checking for any past checkpoints from same job run...")
+            if other_arguments.mlfoundry_checkpoint_artifact_name:
                 last_checkpoint_dir = download_last_checkpoint_if_present(
-                    run,
-                    checkpoint_artifact_name=checkpoint_artifact_name,
+                    ml_repo=other_arguments.mlfoundry_ml_repo,
+                    checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
                     local_dir=training_arguments.output_dir,
                 )
+
         with open(last_checkpoint_info_path, "w") as f:
             last_checkpoint_info = {"last_checkpoint_dir": last_checkpoint_dir}
             json.dump(last_checkpoint_info, f)
@@ -285,6 +325,7 @@ def get_checkpoint_for_resume_if_any(
 def cleanup_checkpoints(
     training_arguments: HFTrainingArguments,
 ):
+    return
     logger.info("Cleaning up older checkpoints...")
     for f in os.listdir(training_arguments.output_dir):
         f_path = os.path.join(training_arguments.output_dir, f)
@@ -292,19 +333,21 @@ def cleanup_checkpoints(
             shutil.rmtree(f_path)
 
 
-def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    # TODO (chiragjn): We do not want anything to be offloaded to cpu or disk here!
+def _cleanup_gpus():
+    # TODO (chiragjn): We do not want anything to be offloaded to cpu or disk otherwise merging adapter fails!
     # This is a known issue with fix in progress
     #   - https://github.com/huggingface/peft/pull/1063
     #   - https://github.com/huggingface/transformers/pull/27412
-    for _ in range(
-        3
-    ):  # Yes, this is stupid but necessary till the above PRs are merged and made available in a new version
+    # Yes, sleeping is stupid but necessary till the above PRs are merged and made available in a new version
+    for _ in range(5):
         gc.collect()
         time.sleep(3)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
+
+
+def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
     check_if_model_will_fit_only_with_gpus(training_arguments=training_arguments, other_arguments=other_arguments)
     logger.info("Loading model and lora layers for merging ...")
     model = AutoPeftModelForCausalLM.from_pretrained(
@@ -484,13 +527,13 @@ class DatasetBuilder:
         """Tokenizes text. Presently doesn't pad inputs, just returns input ids."""
         tokenized = [
             self.tokenizer(
-                prompt,
+                text,
                 return_tensors="pt",
                 padding="longest",
                 max_length=self.max_length,
                 truncation=True,
             ).input_ids
-            for prompt in texts
+            for text in texts
         ]
         return tokenized
 
@@ -527,32 +570,25 @@ class SequenceDataCollator:
     def __init__(self, tokenizer, multiple_of=None):
         self.tokenizer = tokenizer
         self.multiple_of = multiple_of
-        self.cache_count = 0
 
     def pad_to_multiple(self, tensor, value):
-        # taking advantage of tensor cores, perhaps
         multiple = self.multiple_of
-        target_length = (tensor.size(0) + multiple - 1) // multiple * multiple
-        return torch.nn.functional.pad(tensor, (0, target_length - tensor.size(0)), value=value)
+        n = tensor.size(-1)
+        target_length = (n + multiple - 1) // multiple * multiple
+        return torch.nn.functional.pad(tensor, (0, target_length - n), value=value)
 
     def __call__(self, instances):
-        input_ids, labels = tuple([instance[key] for instance in instances] for key in ("input_ids", "labels"))
-        if self.multiple_of:
-            input_ids = [self.pad_to_multiple(val, self.tokenizer.pad_token_id) for val in input_ids]
-            labels = [self.pad_to_multiple(val, IGNORE_INDEX) for val in labels]
-
+        input_ids = [instance["input_ids"] for instance in instances]
+        labels = [instance["labels"] for instance in instances]
         input_ids = torch.nn.utils.rnn.pad_sequence(
             input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
         )
         labels = torch.nn.utils.rnn.pad_sequence(
             labels, batch_first=True, padding_value=IGNORE_INDEX
         )  # -100 tells torch to ignore these tokens in loss computation.
-
-        if self.cache_count < 1:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            self.cache_count += 1
-
+        if self.multiple_of:
+            input_ids = self.pad_to_multiple(input_ids, value=self.tokenizer.pad_token_id)
+            labels = self.pad_to_multiple(labels, value=IGNORE_INDEX)
         return dict(
             input_ids=input_ids,
             labels=labels,
@@ -583,14 +619,9 @@ def load_data(path, max_num_samples: Optional[int] = None):
     n = max_num_samples if max_num_samples else -1
     count = 0
     with tempfile.TemporaryDirectory() as download_dir:
-        if path.startswith("mlfoundry://") or path.startswith("artifact:"):
+        if _is_mlfoundry_artifact(path):
             logger.info("Downloading artifact from mlfoundry")
-            client = mlfoundry.get_client()
-            if path.startswith("mlfoundry://"):
-                _, artifact_version_fqn = path.split("mlfoundry://", 1)
-            else:
-                artifact_version_fqn = path
-            download_path = client.get_artifact_version_by_fqn(artifact_version_fqn).download(download_dir)
+            download_path = _download_mlfoundry_artifact(artifact_version_fqn=path, download_dir=download_dir)
             lines = _read_lines_from_files(download_path)
         elif path.startswith("snowflake://"):
             from utils import get_data_from_snowflake_table
@@ -650,11 +681,20 @@ def get_data(training_arguments: HFTrainingArguments, other_arguments: OtherArgu
     return train_data, eval_data
 
 
-def build_dataset(train_data, eval_data, tokenizer, max_length: int, training_arguments: TrainingArguments):
+def build_dataset(
+    train_data,
+    eval_data,
+    tokenizer,
+    max_length: int,
+    training_arguments: TrainingArguments,
+    other_arguments: OtherArguments,
+):
     logger.info("Building dataset...")
     dataset_cache_path = os.path.join(CACHE_DIR, "dataset")
     if training_arguments.local_rank <= 0:
-        builder = CausalDatasetBuilder(tokenizer=tokenizer, max_length=max_length)
+        builder = CausalDatasetBuilder(
+            tokenizer=tokenizer, max_length=max_length, train_on_prompt=other_arguments.train_on_prompt
+        )
         dataset_dict = DatasetDict(train=Dataset.from_list(train_data), eval=Dataset.from_list(eval_data))
         dataset_dict = dataset_dict.map(
             builder.construct_dataset,
@@ -674,6 +714,15 @@ def build_dataset(train_data, eval_data, tokenizer, max_length: int, training_ar
 
 
 # --- Core Training Code ---
+
+
+def _log_model_parameters(model):
+    logger.info("=== Model Parameters ===")
+    for name, parameter in model.named_parameters():
+        print("\t", name, parameter.dtype, parameter.device, parameter.requires_grad)
+    logger.info("========================")
+
+
 def _maybe_set_custom_tempdir():
     # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
     _tempdir = os.getenv("TMPDIR")
@@ -685,14 +734,21 @@ def _maybe_set_custom_tempdir():
 
 
 def _maybe_set_torch_max_memory(device: int):
-    torch_per_process_memory_limit = os.getenv("TORCH_PER_PROCESS_MEMORY_LIMIT_MIB")
+    torch_per_process_memory_limit = os.getenv("TORCH_PER_PROCESS_MEMORY_LIMIT")
     if torch_per_process_memory_limit:
         if torch.cuda.is_available() and device >= 0:
-            torch_per_process_memory_limit = int(torch_per_process_memory_limit)
+            torch_per_process_memory_limit = float(torch_per_process_memory_limit)
             _, total = torch.cuda.mem_get_info()
-            frac = (torch_per_process_memory_limit * 1024 * 1024) / total
+            if torch_per_process_memory_limit <= 1.0:
+                frac = torch_per_process_memory_limit
+                torch_per_process_memory_limit = frac * total / (1024 * 1024)
+            else:
+                torch_per_process_memory_limit = int(torch_per_process_memory_limit)
+                frac = (torch_per_process_memory_limit * 1024 * 1024) / total
             logger.info(f"Setting max memory limit on device {device} to {frac} ({torch_per_process_memory_limit} MiB)")
             torch.cuda.set_per_process_memory_fraction(frac, device=device)
+    else:
+        torch.cuda.set_per_process_memory_fraction(0.9, device=device)
 
 
 def _setup_logging(training_arguments: HFTrainingArguments):
@@ -716,6 +772,8 @@ def setup(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
     _maybe_set_torch_max_memory(device=training_arguments.local_rank)
 
     if other_arguments.use_flash_attention:
+        # if not (training_arguments.bf16 or training_arguments.fp16):
+        #     raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
         import flash_attn as _
 
 
@@ -741,18 +799,13 @@ def find_all_linear_names(model, other_arguments: OtherArguments, exclude_lm_hea
 
 
 def get_model(
-    model_source: str, model_config, training_arguments: HFTrainingArguments, other_arguments: OtherArguments
+    model_source: str,
+    model_config,
+    training_arguments: HFTrainingArguments,
+    other_arguments: OtherArguments,
+    device_map=None,
 ):
     logger.info("Loading model...")
-    no_of_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
-
-    device_map = None
-    if not training_arguments.deepspeed:
-        if other_arguments.use_ddp and no_of_gpus > 1:
-            device_map = {"": "cuda:" + str(training_arguments.local_rank)}
-        else:
-            device_map = "auto"
-
     model_load_kwargs = {}
     model_load_kwargs["use_cache"] = False if training_arguments.gradient_checkpointing else True
     if model_config.architectures and model_config.architectures[0] == "PhiForCausalLM":
@@ -762,11 +815,14 @@ def get_model(
         model_load_kwargs["use_flash_attention_2"] = other_arguments.use_flash_attention
 
     if other_arguments.use_qlora:
-        if training_arguments.deepspeed:
-            raise ValueError(
-                "deepspeed is incompatible with qlora fine-tuning please try fine-tuning without deepspeed"
-            )
         compute_dtype = get_torch_dtype(training_arguments)
+        torch_dtype = torch.float32
+        if training_arguments.bf16:
+            torch_dtype = torch.bfloat16
+        elif training_arguments.fp16:
+            # https://github.com/artidoro/qlora/blob/7f4e95a68dc076bea9b3a413d2b512eca6d004e5/qlora.py#L327C9-L327C104
+            # QLoRA authors report instability when using float16
+            torch_dtype = torch.float32
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=other_arguments.qlora_bit_length == 4,
             load_in_8bit=other_arguments.qlora_bit_length == 8,
@@ -777,14 +833,16 @@ def get_model(
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
             trust_remote_code=True,
-            torch_dtype=compute_dtype,
+            torch_dtype=torch_dtype,
             quantization_config=bnb_config,
             device_map=device_map,
             **model_load_kwargs,
         )
+        _log_model_parameters(model)
         model = prepare_model_for_kbit_training(
             model, use_gradient_checkpointing=training_arguments.gradient_checkpointing
         )
+        _log_model_parameters(model)
         # TODO (chiragjn): This is disabled because resuming does not work: https://github.com/TimDettmers/bitsandbytes/issues/782
         # training_arguments.optim = "paged_adamw_32bit"
     else:
@@ -801,6 +859,63 @@ def get_model(
     return model
 
 
+def get_peft_wrapped_model(
+    model,
+    training_arguments: HFTrainingArguments,
+    other_arguments: OtherArguments,
+    _device_map=None,
+    _checkpoint_dir: Optional[str] = None,
+):
+    # if _checkpoint_dir:
+    #     model = PeftModel.from_pretrained(
+    #         model=model,
+    #         model_id=checkpoint_dir,
+    #         is_trainable=True,
+    #         device_map=_device_map
+    #     )
+    # else:
+    if other_arguments.lora_target_modules == "auto":
+        modules = find_all_linear_names(model, exclude_lm_head=True, other_arguments=other_arguments)
+    else:
+        modules = json.loads(other_arguments.lora_target_modules)
+    logger.info(f"Modules targeted for lora are {modules}")
+
+    other_arguments.lora_config = LoraConfig(
+        **dict(
+            r=other_arguments.lora_r,
+            lora_alpha=other_arguments.lora_alpha,
+            target_modules=modules,
+            lora_dropout=other_arguments.lora_dropout,
+            bias=other_arguments.lora_bias,
+            task_type="CAUSAL_LM",
+        )
+    )
+    logger.info("Applying peft config ...")
+    other_arguments.lora_config.inference_mode = False
+    model = get_peft_model(model, other_arguments.lora_config)
+
+    # Taken from https://github.com/artidoro/qlora/blob/7f4e95a68dc076bea9b3a413d2b512eca6d004e5/qlora.py#L396
+    for name, module in model.named_modules():
+        if isinstance(module, LoraLayer):
+            if training_arguments.bf16:
+                module = module.to(torch.bfloat16)
+            if "norm" in name:
+                # TODO (chiragjn): This is no longer always required. For e.g. LlamaRMSProp handles half precision correctly
+                # but right now even prepare_model_for_k_bit does it
+                module = module.to(torch.float32)
+        if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
+            if hasattr(module, "weight"):
+                if training_arguments.bf16 and module.weight.dtype == torch.float32:
+                    # This is experimental, normally qlora repo uses it but some others don't recommend it. So far we haven't see major problems.
+                    # Note this downcasting is not recommended when using float16, that can cause numerical instability
+                    module = module.to(torch.bfloat16)
+
+    model.enable_input_require_grads()
+    model.print_trainable_parameters()
+    _log_model_parameters(model)
+    return model
+
+
 def get_tokenizer(model_source: str):
     logger.info("Loading tokenizer...")
     try:
@@ -811,7 +926,8 @@ def get_tokenizer(model_source: str):
             model_source,
             trust_remote_code=True,
         )
-    logging.info(f"Tokenizer's padding side is {tokenizer.padding_side}")
+    logger.info(f"Tokenizer's padding side is {tokenizer.padding_side}")
+    # There are some strategies that also assign unk token as pad token
     special_tokens_dict = {}
     if tokenizer.pad_token is None:
         logger.info("Pad token missing, adding a pad token")
@@ -885,8 +1001,7 @@ def train(
 
     last_checkpoint_dir = get_checkpoint_for_resume_if_any(
         training_arguments=training_arguments,
-        run=run,
-        checkpoint_artifact_name=other_arguments.mlfoundry_checkpoint_artifact_name,
+        other_arguments=other_arguments,
     )
 
     logger.info("Loading config ...")
@@ -907,58 +1022,53 @@ def train(
         tokenizer=tokenizer,
         max_length=max_length,
         training_arguments=training_arguments,
+        other_arguments=other_arguments,
     )
 
     if training_arguments.world_size > 1 and training_arguments.local_rank <= 0:
         logger.info("Getting other ranks in sync with main process")
         torch.distributed.barrier()
 
+    no_of_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    device_map = None
+    if not training_arguments.deepspeed:
+        if other_arguments.use_ddp and no_of_gpus > 1:
+            device_map = {"": "cuda:" + str(training_arguments.local_rank)}
+        else:
+            device_map = "auto"
+
+    # TODO (chiragjn): Ideally we should be loading from checkpoint when available because we resize embeddings in some cases
+    #   but because of device movement bugs with peft we are loading the pretrained model and re-applying peft config
+    #   Details:
+    #   Currently AutoModelForCausalLM.from_pretrained can load adapters from checkpoint but it does not return an instance of PeftModel,
+    #   but some training code relies on checking if instance is PeftModel type
+    #   so we want to re-load the model as PeftModel instance using the above PeftModel.from_pretrained
+    #   Now the problem is when we load using AutoModelForCausalLM from a checkpoint it already has the lora layers in it
+    #   so PeftModel.from_pretrained updates the lora layers and re-inits them
+    #   (re-init is not a problem because resume_from_checkpoint in trainer should restore weights)
+    #   However the layer updating code is broken that it does not move the layers to correct device.
+    #   So you'll get base layers on gpu and lora layers on cpu crashing the code.
+    #   There is a massive refactor in peft which has mostly solved this but unreleased as of writing: https://github.com/huggingface/peft/commit/5a3a5acff2d679358251742564f7b12efbee3a41
+    #   So for now, we always load the base model from pretrained version, resize embeddings is tokenizer from checkpoint has more tokens, and re-apply the peft config from scratch
     model = get_model(
-        model_source=model_source,
+        model_source=other_arguments.model_id,  # This is not a bug
         model_config=model_config,
+        device_map=device_map,
         training_arguments=training_arguments,
         other_arguments=other_arguments,
     )
-    if other_arguments.use_lora or other_arguments.use_qlora:
-        if other_arguments.lora_target_modules == "auto":
-            modules = find_all_linear_names(model, exclude_lm_head=True, other_arguments=other_arguments)
-        else:
-            modules = json.loads(other_arguments.lora_target_modules)
-        logger.info(f"Modules targeted for lora are {modules}")
-
-        other_arguments.lora_config = LoraConfig(
-            **dict(
-                r=other_arguments.lora_r,
-                lora_alpha=other_arguments.lora_alpha,
-                target_modules=modules,
-                lora_dropout=other_arguments.lora_dropout,
-                bias=other_arguments.lora_bias,
-                task_type="CAUSAL_LM",
-            )
-        )
-
-    if num_new_tokens > 0:
+    # TODO (chiragjn): If there are new tokens added, check if we want grads to be enabled on embedding and lm head.
+    #   prepare_model_for_k_bit actually disables grad on embedding and lm head
+    if model.get_input_embeddings().num_embeddings < len(tokenizer):
         logger.info("Resizing embeddings layer for newly added tokens")
         model.resize_token_embeddings(len(tokenizer))
-        # There are some strategies that also assign unk token as pad token
-        # We can also assign the average of all embeddings here for new tokens that got added
 
     if other_arguments.use_lora or other_arguments.use_qlora:
-        logger.info("Applying peft config ...")
-        other_arguments.lora_config.inference_mode = False
-        model = get_peft_model(model, other_arguments.lora_config)
-        for name, module in model.named_modules():
-            if isinstance(module, LoraLayer):
-                if training_arguments.bf16:
-                    module = module.to(torch.bfloat16)
-            if any(ename in name for ename in ("lm_head", "embed_tokens", "embed_in", "embed_out", "wte", "wpe")):
-                if hasattr(module, "weight"):
-                    if training_arguments.bf16 and module.weight.dtype == torch.float32:
-                        module = module.to(torch.bfloat16)
-        if training_arguments.gradient_checkpointing:
-            model.enable_input_require_grads()
-
-        model.print_trainable_parameters()
+        model = get_peft_wrapped_model(
+            model,
+            training_arguments=training_arguments,
+            other_arguments=other_arguments,
+        )
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -972,8 +1082,7 @@ def train(
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         args=training_arguments,
-        data_collator=SequenceDataCollator(tokenizer, multiple_of=8),
-        # Tensor cores are used when tensor dims are multiple of 8
+        data_collator=SequenceDataCollator(tokenizer, multiple_of=other_arguments.pad_to_multiple_of),
         callbacks=[
             MLFoundryCallback(
                 run=run,
@@ -1033,6 +1142,14 @@ def main():
 
     logger.info(f"Training Arguments: {training_arguments}")
     logger.info(f"Arguments: {other_arguments}")
+
+    if other_arguments.use_lora or other_arguments.use_qlora:
+        # TODO (chiragjn): Support LoRA and QLoRA with deepspeed
+        if training_arguments.deepspeed:
+            raise ValueError(
+                "deepspeed is currently not supported with lora/qlora fine-tuning please try fine-tuning without deepspeed"
+            )
+
     setup(training_arguments=training_arguments, other_arguments=other_arguments)
 
     run = None
@@ -1062,6 +1179,7 @@ def main():
             )
 
     train(run=run, training_arguments=training_arguments, other_arguments=other_arguments)
+    _cleanup_gpus()
 
     if training_arguments.local_rank <= 0:
         if other_arguments.use_lora or other_arguments.use_qlora:
