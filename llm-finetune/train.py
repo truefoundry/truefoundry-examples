@@ -325,7 +325,6 @@ def get_checkpoint_for_resume_if_any(
 def cleanup_checkpoints(
     training_arguments: HFTrainingArguments,
 ):
-    return
     logger.info("Cleaning up older checkpoints...")
     for f in os.listdir(training_arguments.output_dir):
         f_path = os.path.join(training_arguments.output_dir, f)
