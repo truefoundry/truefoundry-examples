@@ -1,3 +1,10 @@
-servicefoundry.yaml
+.idea/
+.venv/
+venv/
+*.py[cod]
 model/
 .cache/
+*.safetensors
+pytorch_model*.bin
+*.jsonl
+dev.sh
