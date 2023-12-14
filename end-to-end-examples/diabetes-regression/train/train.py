@@ -29,8 +29,9 @@ def train(kernel: str, n_quantiles: int):
         transformer=QuantileTransformer(n_quantiles=n_quantiles, output_distribution="normal"),
     )
     model.fit(X_train, y_train)
+    model_path = "./classifier.joblib"
     #save the model
-    path = dump(model, "classifier.joblib")
+    dump(model, model_path)
     # get the predictions from the model
     y_pred = model.predict(X_test)
 
@@ -63,7 +64,7 @@ def train(kernel: str, n_quantiles: int):
     # log the model
     model_version = run.log_model(
         name="diabetes-regression",
-        model_file_or_folder=path[0],
+        model_file_or_folder=model_path,
         framework="sklearn",
         description="SVC model trained on initial data",
         custom_metrics=[{"name": "mean_square_error", "type": "metric", "value_type": "float"}]

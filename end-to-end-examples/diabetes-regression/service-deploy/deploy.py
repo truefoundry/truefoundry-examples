@@ -19,7 +19,7 @@ parser.add_argument("--host", required=True, type=str)
 args = parser.parse_args()
 
 service = Service(
-    name="diabetes predicition",
+    name="diabetespredicition",
     image=Build(
         build_spec=PythonBuild(
             command="uvicorn app:app --port 8000 --host 0.0.0.0",
@@ -33,13 +33,10 @@ service = Service(
         )
     ],
     resources=Resources(
-        cpu_request=1,
-        cpu_limit=1,
-        memory_request=2000,
-        memory_limit=2000,
-        ephemeral_storage_request=2000,
-        ephemeral_storage_limit=2000,
-        gpu_count=1,
+        cpu_request=0.2,
+        cpu_limit=0.3,
+        memory_request=300,
+        memory_limit=400,
     ),
 )
 service.deploy(workspace_fqn=args.workspace_fqn)

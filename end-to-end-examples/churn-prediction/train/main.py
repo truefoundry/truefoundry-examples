@@ -73,9 +73,10 @@ def train_model(hyperparams):
         "recall": recall_score(y_test, y_pred, average="weighted"),
     }
     #save the model
-    path = dump(classifier, "classifier.joblib")
+    model_path = "./classifier.joblib"
+    dump(classifier, model_path)
     # Log the experiment
-    experiment_track(path[0], classifier.get_params(), metrics, X_train, X_test)
+    experiment_track(model_path, classifier.get_params(), metrics, X_train, X_test)
 
 
 if __name__ == "__main__":
