@@ -1,29 +1,45 @@
-import logging
-import os
 import argparse
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', force=True)
+import logging
 
-from servicefoundry import Build, Service, PythonBuild
+from servicefoundry import (
+    Build,
+    GPUType,
+    NodeSelector,
+    Port,
+    PythonBuild,
+    Resources,
+    Service,
+)
+
+logging.basicConfig(level=logging.INFO)
 
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--workspace_fqn", type=str, required=True, help="fqn of the workspace to deploy to"
-)
+parser.add_argument("--workspace_fqn", required=True, type=str)
+parser.add_argument("--host", required=True, type=str)
 args = parser.parse_args()
 
-
 service = Service(
-    name="diabetes-reg",
+    name="diabetes predicition",
     image=Build(
         build_spec=PythonBuild(
-            command="uvicorn main:app --port 8000 --host 0.0.0.0",
+            command="uvicorn app:app --port 8000 --host 0.0.0.0",
+            requirements_path="requirements.txt",
         )
     ),
-    ports=[{"port": 8000}],
-    env={
-        "TFY_API_KEY": os.environ['TFY_API_KEY'],
-        "MODEL_VERSION_FQN": os.environ['MODEL_VERSION_FQN']
-    },
-    replicas=1
+    ports=[
+        Port(
+            port=8000,
+            host=args.host,
+        )
+    ],
+    resources=Resources(
+        cpu_request=1,
+        cpu_limit=1,
+        memory_request=2000,
+        memory_limit=2000,
+        ephemeral_storage_request=2000,
+        ephemeral_storage_limit=2000,
+        gpu_count=1,
+    ),
 )
-deployment = service.deploy(workspace_fqn=args.workspace_fqn)
+service.deploy(workspace_fqn=args.workspace_fqn)

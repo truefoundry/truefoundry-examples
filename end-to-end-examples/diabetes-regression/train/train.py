@@ -1,5 +1,6 @@
 import argparse
 import os
+from joblib import dump
 import matplotlib.pyplot as plt
 import mlfoundry
 from sklearn.datasets import load_diabetes
@@ -28,7 +29,8 @@ def train(kernel: str, n_quantiles: int):
         transformer=QuantileTransformer(n_quantiles=n_quantiles, output_distribution="normal"),
     )
     model.fit(X_train, y_train)
-
+    #save the model
+    path = dump(model, "classifier.joblib")
     # get the predictions from the model
     y_pred = model.predict(X_test)
 
@@ -61,15 +63,9 @@ def train(kernel: str, n_quantiles: int):
     # log the model
     model_version = run.log_model(
         name="diabetes-regression",
-        model=model,
+        model_file_or_folder=path[0],
         framework="sklearn",
         description="SVC model trained on initial data",
-        model_schema={
-          "features": [
-            {"name": c, "type": "float"} for c in X.columns
-          ],
-          "prediction": "numeric",
-        },
         custom_metrics=[{"name": "mean_square_error", "type": "metric", "value_type": "float"}]
     )
     print(f"Logged model: {model_version.fqn}")
