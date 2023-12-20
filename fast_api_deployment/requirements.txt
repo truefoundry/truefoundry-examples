@@ -1,4 +1,4 @@
-transformers==4.33.3
+transformers==4.36.0
 torch==2.0.1
 optimum==1.13.2
 auto-gptq==0.4.2
