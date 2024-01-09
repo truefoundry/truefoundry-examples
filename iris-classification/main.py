@@ -1,4 +1,5 @@
 import os
+from joblib import dump
 import mlfoundry
 
 from sklearn import datasets
@@ -55,9 +56,10 @@ run.log_metrics({
     'accuracy': accuracy
 })
 
+path = dump(model, "classifier.joblib")
 # Log model
 model_version = run.log_model(
     name="iris-model",
-    model=model,
+    model_file_or_folder=path[0],
     framework="sklearn"
 )
