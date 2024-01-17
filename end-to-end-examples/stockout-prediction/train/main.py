@@ -14,7 +14,7 @@ def experiment_track(model_path, params, metrics, X_train, X_test):
     mlf_api.create_ml_repo("stockout-prediciton")
     # create a run
     mlf_run = mlf_api.create_run(
-        ml_repo="churn-pred", run_name="churn-train-job"
+        ml_repo=args.ml_repo, run_name="churn-train-job"
     )
     # log the hyperparameters
     # log the metrics
@@ -44,12 +44,7 @@ def train_model(hyperparams):
     # Initialize the KNN Classifier
     classifier = Classification(
         n_neighbors=hyperparams['n_neighbors'],
-        weights=hyperparams['weights'],
-        algorithm=hyperparams['algorithm'],
-        p=hyperparams['power'],
         leaf_size=hyperparams['leaf_size'],
-        metric=hyperparams['metric'],
-        n_jobs=hyperparams['n_jobs']
     )
 
     # Fit the classifier with the training data
@@ -90,32 +85,12 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument(
-        "--weights",
-        type=str,
-        required=True,
-    )
-    parser.add_argument(
-        "--algorithm",
-        type=str,
-        required=True,
-    )
-    parser.add_argument(
-        "--power",
+        "--ml_repo",
         type=int,
-        required=True
+        required=True,
     )
     parser.add_argument(
         "--leaf_size",
-        type=int,
-        required=True
-    )
-    parser.add_argument(
-        "--metric",
-        type=str,
-        required=True
-    )
-    parser.add_argument(
-        "--n_jobs",
         type=int,
         required=True
     )
