@@ -1,0 +1,16 @@
+name: red-wine-batch
+type: job
+image:
+  type: build
+  build_source:
+    type: local
+  build_spec:
+    type: tfy-python-buildpack
+    command: python infer_batch.py
+env:
+  INFERENCE_SERVER_URL: "<Paste your realtime infer service API Endpoint>"
+  TFY_API_KEY: "<Paste your API KEY>"
+trigger:
+  type: scheduled
+  schedule: "*/10 * * * *"
+  concurrency_policy: "Forbid"

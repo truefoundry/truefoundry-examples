@@ -1,0 +1,15 @@
+grpc: false
+name: churn-prediction
+type: model-deployment
+resources:
+  cpu_limit: 0.5
+  cpu_request: 0.2
+  memory_limit: 500
+  memory_request: 200
+  ephemeral_storage_limit: 2000
+  ephemeral_storage_request: 1000
+endpoint:
+  host: <Enter the target host for your model>
+model_source:
+  type: tfy-model-registry
+  model_version_fqn: <Enter model version fqn here>

@@ -1,0 +1,11 @@
+name: red-wine-train
+type: job
+image:
+  type: build
+  build_source:
+    type: local
+  build_spec:
+    type: tfy-python-buildpack
+    command: python train.py
+env:
+  TFY_API_KEY: "<Paste your API KEY>"
