@@ -47,7 +47,6 @@ model_version = run.log_model(
     framework="sklearn",
     description="model trained for Demand Forecasting",
     metadata=metadata,
-    custom_metrics=[{"name": "log_loss", "type": "metric", "value_type": "float"}],
 )
 
 e = time.time()
