@@ -86,7 +86,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--ml_repo",
-        type=int,
+        type=str,
         required=True,
     )
     parser.add_argument(
