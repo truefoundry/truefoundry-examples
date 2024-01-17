@@ -39,21 +39,6 @@ run.log_metrics({
     'test/f1': f1_score(y_test, y_pred_test, average='weighted'),
 })
 
-# log the dataset
-run.log_dataset(
-    dataset_name='train',
-    features=X_train,
-    predictions=y_pred_train,
-    actuals=y_train,
-)
-
-# log the dataset
-run.log_dataset(
-    dataset_name='test',
-    features=X_test,
-    predictions=y_pred_test,
-    actuals=y_test,
-)
 
 # log the model
 model_version = run.log_model(
