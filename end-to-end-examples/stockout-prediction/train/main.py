@@ -14,7 +14,7 @@ def experiment_track(model_path, params, metrics, X_train, X_test):
     # mlf_api.create_ml_repo("stockout-prediciton")
     # create a run
     mlf_run = mlf_api.create_run(
-        ml_repo=args.ml_repo, run_name="churn-train-job"
+        ml_repo=args.ml_repo, run_name="stockout-prediction"
     )
     # log the hyperparameters
     # log the metrics
