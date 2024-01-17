@@ -10,7 +10,7 @@ from dataset import get_initial_data
 s = time.time()
 parser = argparse.ArgumentParser()
 parser.add_argument("--ml_repo_name", type=str)
-parser.add_argument("--train_size", type=int)
+parser.add_argument("--train_size", type=float)
 parser.add_argument("--max_depth", type=int)
 args = parser.parse_args()
 # you can bring data from your own sources

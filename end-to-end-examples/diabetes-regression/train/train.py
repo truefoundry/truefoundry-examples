@@ -82,7 +82,7 @@ if __name__ == "__main__":
     parser.add_argument("--kernel", default="linear", type=str)
     parser.add_argument("--n_quantiles", default=100, type=int)
     parser.add_argument("--ml_repo_name", type=str)
-    parser.add_argument("--train_size", type=int)
+    parser.add_argument("--train_size", type=float)
     parser.add_argument("--max_depth", type=int)
     # get the `Namespace` of the arguments
     args = parser.parse_args()
