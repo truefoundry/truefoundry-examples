@@ -1,27 +1,42 @@
 import argparse
 import logging
-import os
 
-from servicefoundry import ModelDeployment, Resources, TruefoundryModelRegistry, Endpoint
+from servicefoundry import (
+    Build,
+    GPUType,
+    NodeSelector,
+    Port,
+    PythonBuild,
+    Resources,
+    Service,
+)
 
 logging.basicConfig(level=logging.INFO)
 
-# parsing the input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--workspace_fqn",
-    type=str,
-    required=True,
-    help="fqn of workspace where you want to deploy",
-)
-
+parser.add_argument("--workspace_fqn", required=True, type=str)
+parser.add_argument("--host", required=True, type=str)
 args = parser.parse_args()
 
-model_deployment = ModelDeployment(
-    name=f"churn-prediction",
-    model_source=TruefoundryModelRegistry(model_version_fqn=os.environ['MODEL_VERSION_FQN']),
-    resources=Resources(cpu_request=0.2, cpu_limit=0.5, memory_request=500, memory_limit=1000),
-    endpoint=Endpoint(host="<Enter the target host for your model>")
+service = Service(
+    name="churn-prediction",
+    image=Build(
+        build_spec=PythonBuild(
+            command="uvicorn app:app --port 8000 --host 0.0.0.0",
+            requirements_path="requirements.txt",
+        )
+    ),
+    ports=[
+        Port(
+            port=8000,
+            host=args.host,
+        )
+    ],
+    resources=Resources(
+        cpu_request=0.2,
+        cpu_limit=0.3,
+        memory_request=300,
+        memory_limit=400,
+    ),
 )
-)
-model_deployment.deploy(workspace_fqn=args.workspace_fqn)
+service.deploy(workspace_fqn=args.workspace_fqn)

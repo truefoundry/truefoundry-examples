@@ -1,5 +1,4 @@
 env:
-  TFY_API_KEY: # paste API_KEY here
   MODEL_VERSION_FQN: model:truefoundry/truefoundry-demo/diabetes-regression/diabetes-regression:2
 name: diabetes-reg
 type: service

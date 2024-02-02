@@ -4,8 +4,9 @@ import mlfoundry as mlf
 from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay, f1_score, precision_score, recall_score
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+from joblib import dump
 
-def experiment_track(model, params, metrics, X_train, X_test):
+def experiment_track(model_path, params, metrics, X_train, X_test):
     # initialize the mlfoundry client.
     mlf_api = mlf.get_client()
 
@@ -22,7 +23,7 @@ def experiment_track(model, params, metrics, X_train, X_test):
     # log the model
     model_version = mlf_run.log_model(
         name="churn-model",
-        model=model,
+        model_file_or_folder=model_path,
         # specify the framework used (in this case sklearn)
         framework=mlf.ModelFramework.SKLEARN,
         description="churn-prediction-model",
@@ -71,9 +72,11 @@ def train_model(hyperparams):
         "precision": precision_score(y_test, y_pred, average="weighted"),
         "recall": recall_score(y_test, y_pred, average="weighted"),
     }
-
+    #save the model
+    model_path = "./classifier.joblib"
+    dump(classifier, model_path)
     # Log the experiment
-    experiment_track(classifier, classifier.get_params(), metrics, X_train, X_test)
+    experiment_track(model_path, classifier.get_params(), metrics, X_train, X_test)
 
 
 if __name__ == "__main__":
