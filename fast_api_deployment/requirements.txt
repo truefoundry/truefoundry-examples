@@ -2,7 +2,7 @@ transformers==4.33.3
 torch==2.0.1
 optimum==1.13.2
 auto-gptq==0.4.2
-fastapi==0.103.1
+fastapi==0.109.1
 pydantic==2.4.1
 uvicorn[standard]==0.23.2
 gunicorn==21.2.0
