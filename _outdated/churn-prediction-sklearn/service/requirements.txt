@@ -1,4 +1,4 @@
-fastapi==0.78.0
+fastapi==0.109.1
 prometheus-client==0.14.1
 uvicorn==0.16.0
 mlfoundry>=0.3.33,<0.4.0
