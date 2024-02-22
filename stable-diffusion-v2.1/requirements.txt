@@ -7,5 +7,5 @@ triton==2.0.0a2
 diffusers==0.13.1
 accelerate==0.16.0
 transformers==4.30.0
-gradio==3.16.0
+gradio==4.19.2
 https://github.com/camenduru/stable-diffusion-webui-colab/releases/download/0.0.16/xformers-0.0.16+bc08bbc.d20230123-cp38-cp38-linux_x86_64.whl
