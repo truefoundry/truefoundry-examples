@@ -70,23 +70,8 @@ class TruefoundryEmbeddings(Embeddings):
         Returns:
             None
         """
-        try:
-            session = _requests_retry_session(
-                retries=3,
-                backoff_factor=3,
-                status_forcelist=(400, 408, 499, 500, 502, 503, 504),
-            )
-            response = session.post(url=f"{endpoint_url.strip('/')}/v2/repository/index", json={})
-            response.raise_for_status()
-            models = response.json()
-            if len(models) == 0:
-                raise ValueError("No model is deployed in the model server")
-            model_names = [m["name"] for m in models]
-        except Exception as ex:
-            raise Exception(f"Error raised by Inference API: {ex}") from ex
-        else:
-            model_name = model_names[0]
-            self.endpoint = f"{endpoint_url.strip('/')}/v2/models/{model_name}/infer/simple"
+
+        self.endpoint = f"{endpoint_url.strip('/')}/embed"
         self.client = None
         self.batch_size = int(batch_size)
         self.parallel_workers = int(parallel_workers)
