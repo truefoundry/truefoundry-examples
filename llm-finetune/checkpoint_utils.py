@@ -5,7 +5,6 @@ import shutil
 import tempfile
 from typing import Optional, Union
 
-from dist_utils import DistributedState
 from mlfoundry_utils import (
     download_mlfoundry_artifact,
     get_checkpoint_artifact_version_with_step_or_none,

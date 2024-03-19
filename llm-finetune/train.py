@@ -1,24 +1,36 @@
+import contextlib
 import gc
 import json
 import logging
 import os
 import shutil
 import sys
+import tempfile
 import time
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import bitsandbytes as bnb
 import mlfoundry
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
 from checkpoint_utils import cleanup_checkpoints, get_last_checkpoint_for_resume_if_any
-from data_utils import SequenceDataCollator, build_dataset, get_data
+from data_utils import (
+    DataValidationException,
+    SequenceDataCollator,
+    build_dataset,
+    get_data,
+)
 from datasets import DatasetDict
-from deepspeed.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
-from dist_utils import DistributedState
-from mlfoundry_utils import MLFoundryCallback, log_model_to_mlfoundry
+from mlfoundry_utils import (
+    MLFoundryCallback,
+    get_or_create_run,
+    log_model_to_mlfoundry,
+    sanitize_name,
+)
+from monkey_patch import patched_deepspeed_load_checkpoint
 from peft import (
     AutoPeftModelForCausalLM,
     LoraConfig,
@@ -32,30 +44,36 @@ from transformers import (
     AutoTokenizer,
     BitsAndBytesConfig,
     EarlyStoppingCallback,
+    GenerationConfig,
     HfArgumentParser,
     IntervalStrategy,
     Trainer,
     TrainingArguments,
     set_seed,
 )
-from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
-from transformers.utils import WEIGHTS_NAME, is_torch_tf32_available
+from transformers.integrations.deepspeed import (
+    is_deepspeed_zero3_enabled,
+    set_hf_deepspeed_config,
+    unset_hf_deepspeed_config,
+)
+from transformers.integrations.integration_utils import TensorBoardCallback
+from transformers.training_args import ParallelMode, default_logdir
+from transformers.utils import is_torch_tf32_available
 from transformers.utils import logging as hf_logging_utils
+from utils import ExtraMetricsCallback, get_gpu_metrics
 
 # TODO (chiragjn):
-#   - Try using deepspeed (with resume) for all 3 modes - qlora, lora and full
-#   - Test and fix Deepspeed (Zero 3) weight gathering bugs during checkpointing if any
+#   - Invent some work around to use auto batch size finder with deepspeed
 #   - Add support for dataset packing
-#   - Find optimal combinations of batch_size, gradient accumulation, gradient checkpointing to get fastest training time in the given gpu budget
 #   - Add support for dataset streaming
-#   - Add support to use Apex FusedAdam
+#   - Add support to read dataset from HF
 #   - Add support to push to HF Hub
 
+DEBUG = (os.getenv("DEBUG") or "").lower() == "true"
 TFY_INTERNAL_JOB_NAME = os.getenv("TFY_INTERNAL_COMPONENT_NAME")
 TFY_INTERNAL_JOB_RUN_NAME = os.getenv("TFY_INTERNAL_JOB_RUN_NAME")
 THIS_DIR = os.path.abspath(os.path.dirname(__name__))
 CACHE_DIR = os.path.join(THIS_DIR, ".cache")
-EXPORT_ZERO3_CHECKPOINT_TO_FP32 = False
 logger = logging.getLogger("truefoundry-finetune")
 
 
@@ -65,6 +83,15 @@ DEFAULT_BOS_TOKEN = "<s>"
 DEFAULT_UNK_TOKEN = "<unk>"
 PROMPT_KEY = "prompt"
 COMPLETION_KEY = "completion"
+
+
+def _NullableInt(value) -> Optional[int]:
+    if value is not None:
+        if isinstance(value, str):
+            if value.lower() in ["none", "null"]:
+                return None
+            return int(value)
+    return value
 
 
 @dataclass
@@ -79,6 +106,13 @@ class HFTrainingArguments(TrainingArguments):
         if self.gradient_checkpointing:
             self.gradient_checkpointing_kwargs = self.gradient_checkpointing_kwargs or {}
             self.gradient_checkpointing_kwargs["use_reentrant"] = False
+        if self.auto_find_batch_size and self.deepspeed:
+            raise ValueError(
+                f"Auto batch size finder is not supported with Deepseed because of bugs with model preparation: https://github.com/huggingface/transformers/issues/24558"
+            )
+        if self.logging_dir is not None:
+            self.logging_dir = os.path.join(self.logging_dir, default_logdir())
+            os.makedirs(self.logging_dir, exist_ok=True)
         super().__post_init__()
 
 
@@ -93,6 +127,10 @@ class OtherArguments:
     eval_data: Optional[str] = field(
         default="NA",
         metadata={"help": "URL to the jsonl evaluation dataset. Overrides eval_size. Leave as NA if not available"},
+    )
+    revision: Optional[str] = field(
+        default=None,
+        metadata={"help": "Model Revision to load"},
     )
     train_on_prompt: bool = field(
         default=False,
@@ -154,18 +192,30 @@ class OtherArguments:
         default=4,
         metadata={"help": "To enable 8 bit quantization set this to 8 or else by default it is 4"},
     )
-    max_length: Optional[int] = field(
+    max_length: _NullableInt = field(
         default=None,
         metadata={
-            "help": "Max length to truncate the examples to. By default we try to pick "
+            "help": "Max length of the sequences (prompt + completion) to allow. Sequences longer than this would raise a data validation error. By default we try to pick "
             "from tokenizer config (default: None)"
         },
     )
-    max_num_samples: Optional[int] = field(
+    pad_to_max_length: bool = field(
+        default=False,
+        metadata={
+            "help": "If to always pad to the given/found max sequence length. Mostly meant for testing (default: False)"
+        },
+    )
+    truncate_to_max_length: bool = field(
+        default=False,
+        metadata={
+            "help": "If to truncate to max sequence length. When set to False, error is raised for any sequence longer than max sequence length  (default: False)"
+        },
+    )
+    max_num_samples: _NullableInt = field(
         default=None,
         metadata={"help": "For quick debugging purposes, how many samples to use (default: all)"},
     )
-    early_stopping_patience: Optional[int] = field(
+    early_stopping_patience: _NullableInt = field(
         default=None,
         metadata={
             "help": "How many evaluation steps to wait for the metric (loss) to improve before stopping. None or 0 means early stopping is not applied (default: None)"
@@ -204,14 +254,38 @@ class OtherArguments:
 
 
 class HFTrainer(Trainer):
-    def _inner_training_loop(
-        self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
-    ):
-        # Hack to fix: https://github.com/huggingface/transformers/issues/24558
-        if self.args.auto_find_batch_size:
-            self.model_wrapped = self.model
-            self.deepspeed = None
-        return super()._inner_training_loop(batch_size, args, resume_from_checkpoint, trial, ignore_keys_for_eval)
+    def _wrap_model(self, model, training=True, dataloader=None):
+        outputs = super()._wrap_model(model=model, training=training, dataloader=dataloader)
+        if (
+            self.args.parallel_mode == ParallelMode.DISTRIBUTED
+            and self.accelerator.ddp_handler
+            and not self.args.deepspeed
+        ):
+            self.accelerator.ddp_handler.gradient_as_bucket_view = True
+
+        return outputs
+
+    # # This is only for debugging purposes
+    # def create_optimizer_and_scheduler(self, num_training_steps: int):
+    #     outputs = super().create_optimizer_and_scheduler(num_training_steps)
+    #     breakpoint()
+    #     return outputs
+
+    # def training_step(self, model, inputs):
+    #     torch.cuda.synchronize()
+    #     logger.info(f"Pre FWD: {get_gpu_metrics()}")
+    #     outputs = super().training_step(model, inputs)
+    #     torch.cuda.synchronize()
+    #     logger.info(f"FWD + BWD?: {get_gpu_metrics()}")
+    #     breakpoint()
+    #     return outputs
+
+    # def compute_loss(self, model, inputs, return_outputs=False):
+    #     outputs = super().compute_loss(model, inputs, return_outputs)
+    #     torch.cuda.synchronize()
+    #     logger.info(f"FWD: {get_gpu_metrics()}")
+    #     breakpoint()
+    #     return outputs
 
 
 def get_torch_dtype(training_arguments: HFTrainingArguments):
@@ -229,33 +303,63 @@ def _cleanup_gpus():
     #   - https://github.com/huggingface/peft/pull/1063
     #   - https://github.com/huggingface/transformers/pull/27412
     # Yes, sleeping is stupid but necessary till the above PRs are merged and made available in a new version
+    logger.info("Clearing gpus before moving ahead ...")
     for _ in range(6):
         gc.collect()
         time.sleep(10)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
+        logger.info(get_gpu_metrics())
 
 
-def merge_adapters_if_any(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    check_if_model_will_fit_only_with_gpus(training_arguments=training_arguments, other_arguments=other_arguments)
+def _fix_generation_config(model, tokenizer):
+    if hasattr(model, "generation_config"):
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            model.generation_config.validate()
+        if len(caught_warnings) > 0:
+            messages = [str(w) for w in caught_warnings]
+            logger.info(
+                f"`generation_config` is invalid: {messages}. "
+                f"Because transformers refuses to save invalid config since 4.37 we are resetting it to default values. "
+                f"This may cause loss of some generation settings. It is recommended to set the correct generation config "
+                f"during inference."
+            )
+            model.generation_config = GenerationConfig(
+                pad_token_id=tokenizer.pad_token_id,
+                bos_token_id=tokenizer.bos_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+    return model
+
+
+def merge_adapters_if_any(
+    model_id: str,
+    revision: Optional[str],
+    torch_dtype,
+    output_dir: str,
+):
+    check_if_model_will_fit_only_with_gpus(model_id=model_id, revision=revision, torch_dtype=torch_dtype)
     logger.info("Loading model and lora layers for merging ...")
     model = AutoPeftModelForCausalLM.from_pretrained(
-        training_arguments.output_dir,
+        output_dir,
+        revision=None,
         trust_remote_code=True,
         low_cpu_mem_usage=True,
-        torch_dtype=get_torch_dtype(training_arguments),
+        torch_dtype=torch_dtype,
         device_map="balanced",
     )
+    tokenizer, _ = get_tokenizer(model_source=output_dir, revision=None)
     logger.info("Merging lora adapter into main model. This can take a while ...")
     model = model.merge_and_unload()
-    model.save_pretrained(training_arguments.output_dir, safe_serialization=True)
+    model = _fix_generation_config(model=model, tokenizer=tokenizer)
+    model.save_pretrained(output_dir, safe_serialization=True)
     for filename in [
         "adapter_config.json",
         "adapter_model.safetensors",
         "adapter_model.bin",
     ]:
-        file_to_delete = os.path.join(training_arguments.output_dir, filename)
+        file_to_delete = os.path.join(output_dir, filename)
         if os.path.exists(file_to_delete):
             os.remove(file_to_delete)
 
@@ -275,8 +379,10 @@ def filter_trainer_args_for_logging(
         "warmup_ratio": training_arguments.warmup_ratio,
         "use_lora": other_arguments.use_lora,
         "use_qlora": other_arguments.use_qlora,
+        "deepspeed": training_arguments.deepspeed,
+        "use_ddp": other_arguments.use_ddp,
     }
-    if other_arguments.use_lora:
+    if other_arguments.use_lora or other_arguments.use_qlora:
         lora_args = {
             "lora_r": other_arguments.lora_r,
             "lora_alpha": other_arguments.lora_alpha,
@@ -288,9 +394,9 @@ def filter_trainer_args_for_logging(
 
     if other_arguments.use_qlora:
         qlora_args = {
+            "qlora_bit_length": other_arguments.qlora_bit_length,
             "bnb_4bit_quant_type": other_arguments.bnb_4bit_quant_type,
             "use_double_quant": other_arguments.use_double_quant,
-            "qlora_bit_length": other_arguments.qlora_bit_length,
         }
         arguments.update(qlora_args)
 
@@ -298,9 +404,12 @@ def filter_trainer_args_for_logging(
 
 
 def _log_model_parameters(model):
+    global DEBUG
+    if not DEBUG:
+        return
     logger.info("=== Model Parameters ===")
     for name, parameter in model.named_parameters():
-        print("\t", name, parameter.dtype, parameter.device, parameter.requires_grad)
+        logger.info(f"\t {name}, {parameter.dtype}, {parameter.device}, {parameter.requires_grad}")
     logger.info("========================")
 
 
@@ -308,10 +417,13 @@ def _maybe_set_custom_tempdir():
     # We make sure any custom tempdir set by setting `TMPDIR` or equivalent env variables exist
     _tempdir = os.getenv("TMPDIR")
     if _tempdir:
+        _tempdir = os.path.abspath(_tempdir)
         if os.path.exists(_tempdir) and os.path.isfile(_tempdir):
             raise ValueError("Current `TMPDIR` points to a file path, please set it to a directory path")
         else:
             os.makedirs(_tempdir, exist_ok=True)
+        if tempfile.gettempdir() != _tempdir:
+            tempfile.tempdir = _tempdir  # Not good, but necessary
 
 
 def _maybe_set_torch_max_memory(device: int):
@@ -357,10 +469,7 @@ def setup(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
     _setup_logging(training_arguments=training_arguments)
     _maybe_set_custom_tempdir()
     _maybe_set_torch_max_memory(device=training_arguments.local_rank)
-
     if other_arguments.use_flash_attention:
-        # if not (training_arguments.bf16 or training_arguments.fp16):
-        #     raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
         import flash_attn as _
 
 
@@ -387,23 +496,23 @@ def find_all_linear_names(model, other_arguments: OtherArguments, exclude_lm_hea
 
 def get_model(
     model_source: str,
+    revision: Optional[str],
     model_config,
     training_arguments: HFTrainingArguments,
     other_arguments: OtherArguments,
     device_map=None,
 ):
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     logger.info("Loading model...")
-    model_load_kwargs = {}
-    model_load_kwargs["use_cache"] = False if training_arguments.gradient_checkpointing else True
+    model_load_kwargs = {
+        "low_cpu_mem_usage": True,
+        "use_cache": False if training_arguments.gradient_checkpointing else True,
+    }
     if model_config.architectures and model_config.architectures[0] == "PhiForCausalLM":
         model_load_kwargs.pop("use_cache", None)
 
     if other_arguments.use_flash_attention:
-        model_load_kwargs["use_flash_attention_2"] = other_arguments.use_flash_attention
+        model_load_kwargs["attn_implementation"] = "flash_attention_2"
 
     if other_arguments.use_qlora:
         compute_dtype = get_torch_dtype(training_arguments)
@@ -423,6 +532,7 @@ def get_model(
         )
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
+            revision=revision,
             trust_remote_code=True,
             torch_dtype=torch_dtype,
             quantization_config=bnb_config,
@@ -437,10 +547,13 @@ def get_model(
         if dist_s.is_main_process:
             _log_model_parameters(model)
         # TODO (chiragjn): This is disabled because resuming does not work: https://github.com/TimDettmers/bitsandbytes/issues/782
-        # training_arguments.optim = "paged_adamw_32bit"
+        # training_arguments.optim = "paged_adamw_32bit" # "paged_adamw_8bit"
     else:
+        if training_arguments.deepspeed and is_deepspeed_zero3_enabled:
+            model_load_kwargs.pop("low_cpu_mem_usage", None)
         model = AutoModelForCausalLM.from_pretrained(
             model_source,
+            revision=revision,
             trust_remote_code=True,
             torch_dtype=get_torch_dtype(training_arguments),
             device_map=device_map,
@@ -456,13 +569,11 @@ def get_peft_wrapped_model(
     model,
     training_arguments: HFTrainingArguments,
     other_arguments: OtherArguments,
+    modules_to_save: Optional[List[str]] = None,
     _device_map=None,
     _checkpoint_dir: Optional[str] = None,
 ):
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     # if _checkpoint_dir:
     #     model = PeftModel.from_pretrained(
     #         model=model,
@@ -485,6 +596,7 @@ def get_peft_wrapped_model(
             lora_dropout=other_arguments.lora_dropout,
             bias=other_arguments.lora_bias,
             task_type="CAUSAL_LM",
+            modules_to_save=modules_to_save,
         )
     )
     logger.info("Applying peft config ...")
@@ -524,14 +636,17 @@ def get_peft_wrapped_model(
     return model
 
 
-def get_tokenizer(model_source: str):
+def get_tokenizer(model_source: str, revision: Optional[str]):
     logger.info("Loading tokenizer...")
     try:
         # Note: First we try loading with use_fast=False because for some models conversion takes too long
-        tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, use_fast=False)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_source, revision=revision, trust_remote_code=True, use_fast=False
+        )
     except ValueError:
         tokenizer = AutoTokenizer.from_pretrained(
             model_source,
+            revision=revision,
             trust_remote_code=True,
         )
     logger.info(f"Tokenizer's padding side is {tokenizer.padding_side}")
@@ -551,40 +666,74 @@ def get_tokenizer(model_source: str):
         special_tokens_dict["unk_token"] = DEFAULT_UNK_TOKEN
     # TODO (chiragjn): Consider adding fake tokens to vocab to pad to multiple of 64. Can provide better throughput
     num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
+    if "bos_token" or "eos_token" in special_tokens_dict:
+        if hasattr(tokenizer, "update_post_processor"):
+            tokenizer.update_post_processor()
     return tokenizer, num_new_tokens
 
 
 def get_max_length(max_length, tokenizer, model_config):
     logger.info("Resolving max_length for truncation...")
+    model_max_length = None
+    if tokenizer.model_max_length > int(1e6):
+        logger.info(f"tokenizer config does not have proper model_max_length set. Looking at model config")
+        for length_setting in [
+            "max_position_embeddings",
+            "max_sequence_length",
+            "n_positions",
+        ]:
+            model_max_length = getattr(model_config, length_setting, None)
+            if model_max_length:
+                logger.info(f"Assuming value of {length_setting} from model config as max length: {model_max_length}")
+                break
+        if not model_max_length:
+            logger.info(
+                f"Found no max length setting, falling back to default of 1024. If this fallback is undesired then please fix the model max length in tokenizer/model config."
+            )
+            model_max_length = 1024
+    else:
+        model_max_length = tokenizer.model_max_length
+
     if max_length is None:
-        if tokenizer.model_max_length > int(1e6):
-            logger.info(f"tokenizer config does not have proper model_max_length set. Looking at model config")
-            for length_setting in [
-                "max_sequence_length",
-                "n_positions",
-                "max_position_embeddings",
-            ]:
-                max_length = getattr(model_config, length_setting, None)
-                if max_length:
-                    logger.info(f"Assuming value of {length_setting} from model config as max length: {max_length}")
-                    break
-            if not max_length:
-                logger.info(f"Found no max length setting, falling back to default of 512")
-                max_length = 512
-        else:
-            max_length = tokenizer.model_max_length
+        max_length = model_max_length
+    else:
+        if max_length > model_max_length:
+            raise ValueError(
+                f"Chosen `max_length` ({max_length}) is longer than model's max length ({model_max_length}). "
+            )
+
     logger.info(f"Finally using max_length: {max_length}")
     return max_length
 
 
+@contextlib.contextmanager
+def deepspeed_zero3_disabled(training_arguments: HFTrainingArguments):
+    if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
+        unset_hf_deepspeed_config()
+        yield
+        set_hf_deepspeed_config(training_arguments.hf_deepspeed_config)
+    else:
+        yield
+
+
 def check_if_model_will_fit_only_with_gpus(
-    training_arguments: HFTrainingArguments,
-    other_arguments: OtherArguments,
+    model_id: str,
+    revision: Optional[str],
+    torch_dtype,
 ):
-    config = AutoConfig.from_pretrained(other_arguments.model_id, trust_remote_code=True)
     with init_empty_weights():
-        model = AutoModelForCausalLM.from_config(config, trust_remote_code=True)
-    device_map = infer_auto_device_map(model, dtype=get_torch_dtype(training_arguments))
+        config = AutoConfig.from_pretrained(
+            model_id,
+            revision=revision,
+            trust_remote_code=True,
+        )
+        model = AutoModelForCausalLM.from_config(
+            config=config,
+            trust_remote_code=True,
+            torch_dtype=torch_dtype,
+            # low_cpu_mem_usage=True,
+        )
+    device_map = infer_auto_device_map(model, dtype=torch_dtype)
     logger.info(f"Inferred device_map for auto settings: {device_map}")
     if any(not isinstance(v, int) for v in device_map.values()):
         raise RuntimeError(
@@ -598,10 +747,7 @@ def dist_get_last_checkpoint_for_resume_if_any(
     other_arguments: OtherArguments,
 ):
     last_checkpoint_dir = None
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     last_checkpoint_info_path = os.path.join(CACHE_DIR, "last_checkpoint_info.json")
     if dist_s.is_main_process:
         last_checkpoint_dir = get_last_checkpoint_for_resume_if_any(
@@ -626,25 +772,40 @@ def dist_build_dataset(
     train_data,
     eval_data,
     tokenizer,
-    max_length,
+    max_length: int,
+    pad_to_max_length: bool,
+    truncate_to_max_length: bool,
     train_on_prompt: bool,
     training_arguments: HFTrainingArguments,
 ):
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     logger.info("Building dataset...")
     dataset_cache_path = os.path.join(CACHE_DIR, "dataset")
     if dist_s.is_main_process:
-        dataset_dict = build_dataset(
+        dataset_dict, dataset_info = build_dataset(
             train_data=train_data,
             eval_data=eval_data,
             tokenizer=tokenizer,
             max_length=max_length,
+            pad_to_max_length=pad_to_max_length,
             train_on_prompt=train_on_prompt,
         )
         dataset_dict.save_to_disk(dataset_cache_path)
+        logger.info(f"Dataset max sequence lengths: {dataset_info}")
+        if not truncate_to_max_length and any(
+            length > max_length
+            for length in (
+                dataset_info.train_max_prompt_length,
+                dataset_info.train_max_total_length,
+                dataset_info.eval_max_prompt_length,
+                dataset_info.eval_max_total_length,
+            )
+        ):
+            raise DataValidationException(
+                f"Some sequences in the dataset have prompt or (prompt +  completion) lengths greater than the "
+                f"selected max sequence length ({max_length}). Please check the dataset length numbers above. "
+                f"Please remove such longer sequences and restart."
+            )
     else:
         logger.info("Loading datasets from cache ...")
         dataset_dict = DatasetDict.load_from_disk(dataset_cache_path)
@@ -661,10 +822,8 @@ def _train(
     other_arguments: OtherArguments,
     run: Optional[mlfoundry.MlFoundryRun] = None,
 ):
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
+    dist_s.wait_for_everyone()
     set_seed(training_arguments.seed)
 
     if not dist_s.is_main_process:
@@ -687,14 +846,16 @@ def _train(
         )
 
         logger.info("Loading config ...")
-        model_config = AutoConfig.from_pretrained(other_arguments.model_id, trust_remote_code=True)
+        model_config = AutoConfig.from_pretrained(
+            other_arguments.model_id, revision=other_arguments.revision, trust_remote_code=True
+        )
 
         if last_checkpoint_dir:
             model_source = last_checkpoint_dir
         else:
             model_source = other_arguments.model_id
 
-        tokenizer, num_new_tokens = get_tokenizer(model_source)
+        tokenizer, num_new_tokens = get_tokenizer(model_source, revision=other_arguments.revision)
 
         max_length = get_max_length(
             max_length=other_arguments.max_length,
@@ -707,12 +868,13 @@ def _train(
             eval_data=eval_data,
             tokenizer=tokenizer,
             max_length=max_length,
+            pad_to_max_length=other_arguments.pad_to_max_length,
+            truncate_to_max_length=other_arguments.truncate_to_max_length,
             train_on_prompt=other_arguments.train_on_prompt,
             training_arguments=training_arguments,
         )
 
     no_of_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
-    device_map = None
     if training_arguments.deepspeed:
         device_map = None
     elif other_arguments.use_ddp:
@@ -720,6 +882,8 @@ def _train(
             device_map = {"": "cuda:" + str(training_arguments.local_rank)}
         else:
             device_map = "auto"
+    else:
+        device_map = "auto"
 
     # TODO (chiragjn): Ideally we should be loading from checkpoint when available because we resize embeddings in some cases
     #   but because of device movement bugs with peft we are loading the pretrained model and re-applying peft config
@@ -732,35 +896,40 @@ def _train(
     #   (re-init is not a problem because resume_from_checkpoint in trainer should restore weights)
     #   However the layer updating code is broken that it does not move the layers to correct device.
     #   So you'll get base layers on gpu and lora layers on cpu crashing the code.
-    #   There is a massive refactor in peft which has mostly solved this but unreleased as of writing: https://github.com/huggingface/peft/commit/5a3a5acff2d679358251742564f7b12efbee3a41
-    #   So for now, we always load the base model from pretrained version, resize embeddings is tokenizer from checkpoint has more tokens, and re-apply the peft config from scratch
+    #   There is a massive refactor in peft 0.7.0 which has mostly solved this but will need some time to migrate correctly
+    #   So for now, we always load the base model from pretrained version, resize embeddings is tokenizer from checkpoint has more tokens,
+    #   and re-apply the peft config from scratch
     model = get_model(
         model_source=other_arguments.model_id,  # This is not a bug
+        revision=other_arguments.revision,
         model_config=model_config,
         device_map=device_map,
         training_arguments=training_arguments,
         other_arguments=other_arguments,
     )
-    # TODO (chiragjn): If there are new tokens added, check if we want grads to be enabled on embedding and lm head.
-    #   prepare_model_for_k_bit actually disables grad on embedding and lm head
+    lora_modules_to_save = None
     if model.get_input_embeddings().num_embeddings < len(tokenizer):
-        logger.info("Resizing embeddings layer for newly added tokens")
+        logger.info(
+            f"Resizing embeddings layer for newly added tokens. "
+            f"Tokenizer length is {len(tokenizer)} but model embedding "
+            f"layer has {model.get_input_embeddings().num_embeddings}"
+        )
         model.resize_token_embeddings(len(tokenizer))
+        # TODO (chiragjn): Check if we want to enable this!
+        # lora_modules_to_save = ["embed_tokens", "lm_head"]
 
     if other_arguments.use_lora or other_arguments.use_qlora:
         model = get_peft_wrapped_model(
             model,
             training_arguments=training_arguments,
             other_arguments=other_arguments,
+            modules_to_save=lora_modules_to_save,
         )
 
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
-
+    model = _fix_generation_config(model=model, tokenizer=tokenizer)
     logger.info("Training...")
     # TODO (chiragjn): Add text generation metrics to `compute_metrics
-    callbacks = []
+    callbacks = [ExtraMetricsCallback(), TensorBoardCallback()]
     if run:
         callbacks.append(
             MLFoundryCallback(
@@ -786,35 +955,33 @@ def _train(
         callbacks=callbacks,
     )
 
-    trainer.train(resume_from_checkpoint=last_checkpoint_dir)
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
 
+    dist_s.wait_for_everyone()
+    if training_arguments.deepspeed:
+        with patched_deepspeed_load_checkpoint():
+            trainer.train(resume_from_checkpoint=last_checkpoint_dir)
+    else:
+        trainer.train(resume_from_checkpoint=last_checkpoint_dir)
     dist_s.wait_for_everyone()
 
     logger.info("Saving model...")
-    if training_arguments.deepspeed and is_deepspeed_zero3_enabled() and EXPORT_ZERO3_CHECKPOINT_TO_FP32:
-        # TODO (chiragjn): Disabled for now. Test and Re-enable, check the half precision format
-        #  Under ZeRO 3, when checkpointing, each rank saves their own part, in zero format
-        #  if "stage3_gather_16bit_weights_on_model_save": true,
-        #  then an additional pytorch_model.bin is saved as a 16-bit checkpoint
-        #  if we want fp32 pytorch_model.bin then we would have to export separately from the checkpoint in zero format
-        trainer.save_model(output_dir=training_arguments.output_dir)
-        if dist_s.is_main_process:
-            fp32_weights_path = os.path.join(training_arguments.output_dir, WEIGHTS_NAME)
-            convert_zero_checkpoint_to_fp32_state_dict(trainer.state.best_model_checkpoint, fp32_weights_path)
-            cleanup_checkpoints(output_dir=training_arguments.output_dir)
-    else:
-        if dist_s.is_main_process:
-            cleanup_checkpoints(output_dir=training_arguments.output_dir)
-        trainer.save_model(output_dir=training_arguments.output_dir)
+    if dist_s.is_main_process:
+        cleanup_checkpoints(output_dir=training_arguments.output_dir)
+    dist_s.wait_for_everyone()
+    trainer.save_model(output_dir=training_arguments.output_dir)
+    dist_s.wait_for_everyone()
 
+    if training_arguments.deepspeed and hasattr(trainer, "deepspeed") and hasattr(trainer.deepspeed, "destroy"):
+        trainer.deepspeed.destroy()
+    trainer.accelerator.free_memory()
     dist_s.wait_for_everyone()
 
 
 def train(training_arguments: HFTrainingArguments, other_arguments: OtherArguments):
-    dist_s = DistributedState(
-        world_size=training_arguments.world_size,
-        local_rank=training_arguments.local_rank,
-    )
+    dist_s = training_arguments.distributed_state
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     logger.info(f"Training Arguments: {training_arguments}")
     logger.info(f"Arguments: {other_arguments}")
@@ -822,40 +989,40 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
     if other_arguments.use_qlora:
         if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
             raise RuntimeError("No GPUs detected. We need at least one gpu available for Lora/QLora finetuning!")
+        if training_arguments.deepspeed and is_deepspeed_zero3_enabled():
+            raise ValueError("Deepspeed Zero 3 is currently not supported with QLoRa")
 
-    if other_arguments.use_lora:
-        # TODO (chiragjn): Support LoRA with deepspeed
-        if training_arguments.deepspeed:
-            raise ValueError(
-                "deepspeed is currently not supported with lora/qlora fine-tuning please try fine-tuning without deepspeed"
-            )
+    if other_arguments.use_flash_attention and not (training_arguments.bf16 or training_arguments.fp16):
+        raise ValueError("--use_flash_attention requires either --bf16 or --fp16")
 
     setup(training_arguments=training_arguments, other_arguments=other_arguments)
 
     run = None
     if dist_s.is_main_process and other_arguments.mlfoundry_enable_reporting:
-        mlfoundry_client = mlfoundry.get_client()
         if not other_arguments.mlfoundry_run_name:
-            fallback_run_name = f"finetune-{timestamp}"
+            if TFY_INTERNAL_JOB_RUN_NAME:
+                fallback_run_name = f"finetune-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
+            else:
+                fallback_run_name = f"finetune-{timestamp}"
             logger.info(f"Setting --mlfoundry_run_name automatically to {fallback_run_name}")
             other_arguments.mlfoundry_run_name = fallback_run_name
-        run = mlfoundry_client.create_run(
+
+        run = get_or_create_run(
             ml_repo=other_arguments.mlfoundry_ml_repo,
             run_name=other_arguments.mlfoundry_run_name,
+            auto_end=False,
+            create_ml_repo=False,
         )
-
-        if not other_arguments.mlfoundry_checkpoint_artifact_name:
-            if TFY_INTERNAL_JOB_RUN_NAME:
-                mlfoundry_checkpoint_artifact_name = f"checkpoint-{TFY_INTERNAL_JOB_RUN_NAME}"
+        if other_arguments.mlfoundry_log_checkpoints:
+            if not other_arguments.mlfoundry_checkpoint_artifact_name:
+                if TFY_INTERNAL_JOB_RUN_NAME:
+                    mlfoundry_checkpoint_artifact_name = f"ckpt-{sanitize_name(TFY_INTERNAL_JOB_RUN_NAME)}"
+                else:
+                    mlfoundry_checkpoint_artifact_name = f"ckpt-{run.run_name}"
                 logger.info(
                     f"Setting --mlfoundry_checkpoint_artifact_name automatically to {mlfoundry_checkpoint_artifact_name}"
                 )
                 other_arguments.mlfoundry_checkpoint_artifact_name = mlfoundry_checkpoint_artifact_name
-
-        if other_arguments.mlfoundry_log_checkpoints and not other_arguments.mlfoundry_checkpoint_artifact_name:
-            raise ValueError(
-                "--mlfoundry_log_checkpoints was set to true but --mlfoundry_checkpoint_artifact_name is either unset or cannot be automatically decided. Please set it explicitly"
-            )
 
         run.log_params(vars(other_arguments), flatten_params=True)
         run.log_params(
@@ -873,25 +1040,38 @@ def train(training_arguments: HFTrainingArguments, other_arguments: OtherArgumen
 
     if dist_s.is_main_process:
         if other_arguments.use_lora or other_arguments.use_qlora:
-            check_if_model_will_fit_only_with_gpus(
-                training_arguments=training_arguments, other_arguments=other_arguments
-            )
+            with deepspeed_zero3_disabled(training_arguments):
+                check_if_model_will_fit_only_with_gpus(
+                    model_id=other_arguments.model_id,
+                    revision=other_arguments.revision,
+                    torch_dtype=get_torch_dtype(training_arguments),
+                )
 
+    logger.info(get_gpu_metrics())
     _train(
         training_arguments=training_arguments,
         other_arguments=other_arguments,
         run=run,
     )
-    _cleanup_gpus()
+    logger.info(get_gpu_metrics())
 
-    if dist_s.is_main_process:
-        if other_arguments.use_lora or other_arguments.use_qlora:
-            merge_adapters_if_any(training_arguments=training_arguments, other_arguments=other_arguments)
+    if other_arguments.use_lora or other_arguments.use_qlora:
+        _cleanup_gpus()
+        dist_s.wait_for_everyone()
+
+        if dist_s.is_main_process:
+            with deepspeed_zero3_disabled(training_arguments):
+                merge_adapters_if_any(
+                    model_id=other_arguments.model_id,
+                    revision=other_arguments.revision,
+                    torch_dtype=get_torch_dtype(training_arguments),
+                    output_dir=training_arguments.output_dir,
+                )
 
     if dist_s.is_main_process and run:
         *_, model_name = other_arguments.model_id.rsplit("/", 1)
         model_name = "-".join(["finetuned", model_name, timestamp])
-        model_name = model_name.replace(".", "-")
+        model_name = sanitize_name(model_name)
         cleanup_checkpoints(output_dir=training_arguments.output_dir)
         log_model_to_mlfoundry(
             run=run,
