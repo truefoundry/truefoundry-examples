@@ -1,3 +1,0 @@
-gradio==3.2
-transformers==4.17.0
-torch==1.12.1

@@ -1,7 +1,8 @@
 *.py[cod]
-.*/
+.ipynb_checkpoints/
 !.github
 .servicefoundry
 .DS_Store
 venv/
 **/venv/
+.idea/
