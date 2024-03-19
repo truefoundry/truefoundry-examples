@@ -1,8 +1,10 @@
 import logging
 import math
 import os
+import random
 import re
 import shutil
+import string
 from typing import Any, Dict, Optional
 
 import mlfoundry
@@ -114,7 +116,7 @@ def get_checkpoint_artifact_version_with_step_or_none(
 class MLFoundryCallback(TrainerCallback):
     def __init__(
         self,
-        run: Optional[mlfoundry.MlFoundryRun] = None,
+        run: mlfoundry.MlFoundryRun,
         log_checkpoints: bool = True,
         checkpoint_artifact_name: Optional[str] = None,
     ):
@@ -127,30 +129,13 @@ class MLFoundryCallback(TrainerCallback):
 
     # noinspection PyMethodOverriding
     def on_log(self, args, state, control, logs, model=None, **kwargs):
-        # TODO (chiragjn): Hack for now, needs to be moved to `compute_metrics`
-        #   unfortunately compute metrics does not give us already computed metrics like eval_loss
         if not state.is_world_process_zero:
-            return
-
-        for loss_key, perplexity_key in [
-            ("loss", "train_perplexity"),
-            ("eval_loss", "eval_perplexity"),
-        ]:
-            if loss_key in logs:
-                try:
-                    perplexity = math.exp(logs[loss_key])
-                except OverflowError:
-                    perplexity = float("inf")
-                    logger.warning(f"Encountered inf in eval perplexity, cannot log it as a metric")
-                logger.info(f"{perplexity_key}: {perplexity}")
-                logs[perplexity_key] = perplexity
-
-        logger.info(f"Metrics: {logs}")
-        if not self._run:
             return
 
         metrics = {}
         for k, v in logs.items():
+            if k.startswith("system/gpu"):
+                continue
             if isinstance(v, (int, float, np.integer, np.floating)) and math.isfinite(v):
                 metrics[k] = v
             else:
@@ -169,7 +154,7 @@ class MLFoundryCallback(TrainerCallback):
         if not self._log_checkpoints:
             return
 
-        if not self._run or not self._checkpoint_artifact_name:
+        if not self._checkpoint_artifact_name:
             return
 
         ckpt_dir = f"checkpoint-{state.global_step}"
@@ -189,3 +174,30 @@ class MLFoundryCallback(TrainerCallback):
             step=state.global_step,
             description=description,
         )
+
+
+def sanitize_name(value):
+    return re.sub(rf"[{re.escape(string.punctuation)}]+", "-", value.encode("ascii", "ignore").decode("utf-8"))
+
+
+def generate_run_name(model_id):
+    *_, model_name = model_id.split("/", 1)
+    sanitized_model_name = sanitize_name(model_name)
+    alphabet = string.ascii_lowercase + string.digits
+    random.choices(alphabet, k=8)
+    random_id = "".join(random.choices(alphabet, k=6))
+    run_name = f"ft-{sanitized_model_name}-{random_id}"
+    return run_name
+
+
+def get_or_create_run(ml_repo: str, run_name: str, auto_end: bool = False, create_ml_repo: bool = False):
+    client = mlfoundry.get_client()
+    if create_ml_repo:
+        client.create_ml_repo(ml_repo=ml_repo)
+    try:
+        run = client.get_run_by_name(ml_repo=ml_repo, run_name=run_name)
+    except Exception as e:
+        if "RESOURCE_DOES_NOT_EXIST" not in str(e):
+            raise
+        run = client.create_run(ml_repo=ml_repo, run_name=run_name, auto_end=auto_end)
+    return run
